@@ -118,4 +118,102 @@ describe('ProgressService', () => {
       expect(result.alreadyRead).toBe(0);
     });
   });
+
+  describe('getContinuePosition', () => {
+    function buildContinueMockClient(
+      userPlanId: string | null,
+      firstDay: unknown,
+      lastDay: unknown,
+      nextVerse: unknown,
+    ) {
+      let fromCallCount = 0;
+      return {
+        from: jest.fn().mockImplementation((table: string) => {
+          fromCallCount++;
+          if (table === 'users') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              is: jest.fn().mockReturnThis(),
+              single: jest.fn().mockResolvedValue({
+                data: userPlanId ? { plan_id: userPlanId } : { plan_id: null },
+                error: null,
+              }),
+            };
+          }
+          if (table === 'plans') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              limit: jest.fn().mockReturnThis(),
+              single: jest.fn().mockResolvedValue({ data: { id: 'plan-1' }, error: null }),
+            };
+          }
+          if (table === 'plan_days') {
+            // first call = lastDay query (desc), second = firstDay query (asc)
+            const isFirst = fromCallCount <= 3;
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              order: jest.fn().mockReturnThis(),
+              limit: jest.fn().mockReturnThis(),
+              single: jest.fn().mockResolvedValue({
+                data: isFirst ? lastDay : firstDay,
+                error: null,
+              }),
+            };
+          }
+          if (table === 'verse_reads') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockResolvedValue({ data: [], error: null }),
+            };
+          }
+          if (table === 'verses') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              gte: jest.fn().mockReturnThis(),
+              lte: jest.fn().mockReturnThis(),
+              order: jest.fn().mockReturnThis(),
+              limit: jest.fn().mockReturnThis(),
+              single: jest.fn().mockResolvedValue({
+                data: nextVerse,
+                error: nextVerse ? null : { message: 'not found' },
+              }),
+            };
+          }
+          return { select: jest.fn().mockReturnThis() };
+        }),
+      };
+    }
+
+    it('returns first unread verse when some verses have been read', async () => {
+      const lastDay = { end_global_order: 31102 };
+      const firstDay = { start_global_order: 1 };
+      const nextVerseData = {
+        id: 5,
+        number: 5,
+        chapters: { number: 1, books: { name: 'Genesis', usfm_code: 'GEN' } },
+      };
+      const mockClient = buildContinueMockClient('plan-1', firstDay, lastDay, nextVerseData);
+      await createService(mockClient);
+
+      const result = await service.getContinuePosition(USER_ID);
+
+      expect(result).not.toBeNull();
+      expect(result?.verseId).toBe(5);
+      expect(result?.bookUsfm).toBe('GEN');
+      expect(result?.chapterNumber).toBe(1);
+    });
+
+    it('returns null when no unread verses remain (all read)', async () => {
+      const lastDay = { end_global_order: 31102 };
+      const firstDay = { start_global_order: 1 };
+      const mockClient = buildContinueMockClient('plan-1', firstDay, lastDay, null);
+      await createService(mockClient);
+
+      const result = await service.getContinuePosition(USER_ID);
+      expect(result).toBeNull();
+    });
+  });
 });

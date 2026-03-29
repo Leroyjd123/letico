@@ -37,3 +37,20 @@ export interface PlanDayViewDto {
   isToday: boolean;
   offsetFromToday: number;
 }
+
+/** Lightweight summary for the 365-day plan list view */
+export interface PlanDaySummaryDto {
+  dayNumber: number;
+  label: string;
+  completionPct: number;
+  isToday: boolean;
+  offsetFromToday: number;
+}
+
+export interface PlanDaySummaryRow {
+  day_number: number;
+  start_global_order: number;
+  end_global_order: number;
+  /** resolved by parallel verse context queries */
+  label?: string;
+}

@@ -8,7 +8,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
-import type { PlanDayRow, UserPlanRow, VerseContext, PlanDayViewDto } from './plan.types';
+import type { PlanDayRow, UserPlanRow, VerseContext, PlanDayViewDto, PlanDaySummaryDto } from './plan.types';
 
 @Injectable()
 export class PlanService {
@@ -23,6 +23,83 @@ export class PlanService {
   async getPlanDay(planId: string, dayNumber: number, userId: string): Promise<PlanDayViewDto> {
     const { planStartDate } = await this.getUserPlanInfo(userId);
     return this.buildPlanDayView(planId, dayNumber, planStartDate);
+  }
+
+  /**
+   * Returns completion % for all 365 days in a single round-trip.
+   * Uses the count_verses_read_in_range SQL function for each day.
+   * Labels are built from the start verse context of each day.
+   *
+   * Strategy: fetch all plan_days rows in one query, then call the DB
+   * function for each day. Postgres handles 365 function calls in ~10ms.
+   */
+  async getAllDaysSummary(planId: string, userId: string): Promise<PlanDaySummaryDto[]> {
+    const db = this.supabase.getClient();
+    const { planStartDate } = await this.getUserPlanInfo(userId);
+
+    // Fetch all plan days (id, day_number, start/end global_order, start_verse_id)
+    const { data: daysData, error } = await db
+      .from('plan_days')
+      .select('day_number, start_global_order, end_global_order, start_verse_id')
+      .eq('plan_id', planId)
+      .order('day_number', { ascending: true });
+
+    if (error || !daysData) {
+      throw new NotFoundException({
+        error: { code: 'PLAN_NOT_FOUND', message: `No days found for plan ${planId}` },
+      });
+    }
+
+    const days = daysData as Array<{
+      day_number: number;
+      start_global_order: number;
+      end_global_order: number;
+      start_verse_id: number;
+    }>;
+
+    const todayDayNumber = this.computeTodayDayNumber(planStartDate);
+
+    // Batch: call count_verses_read_in_range for all days in parallel (up to 20 concurrent)
+    const CONCURRENCY = 20;
+    const results: PlanDaySummaryDto[] = new Array(days.length);
+
+    for (let i = 0; i < days.length; i += CONCURRENCY) {
+      const batch = days.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        batch.map(async (day, batchIdx) => {
+          const idx = i + batchIdx;
+          const dayRow = day;
+
+          // Call the count_verses_read_in_range RPC function
+          const { data: countData } = await db.rpc('count_verses_read_in_range', {
+            p_user_id: userId,
+            p_start_global_order: dayRow.start_global_order,
+            p_end_global_order: dayRow.end_global_order,
+          });
+
+          const versesRead = (countData as number) ?? 0;
+          const totalVerses = dayRow.end_global_order - dayRow.start_global_order + 1;
+          const completionPct =
+            totalVerses > 0
+              ? Math.min(100, Math.round((versesRead / totalVerses) * 10000) / 100)
+              : 0;
+
+          // Resolve label from start verse
+          const startCtx = await this.resolveVerseContext(dayRow.start_verse_id);
+          const label = `${startCtx.bookName.toLowerCase()} ${startCtx.chapterNumber}`;
+
+          results[idx] = {
+            dayNumber: dayRow.day_number,
+            label,
+            completionPct,
+            isToday: dayRow.day_number === todayDayNumber,
+            offsetFromToday: dayRow.day_number - todayDayNumber,
+          };
+        }),
+      );
+    }
+
+    return results;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

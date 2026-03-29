@@ -17,6 +17,37 @@ export class AuthService {
    * The guest_token is a UUID that the client must store in localStorage.
    * The plan_id defaults to the 1yr plan so plan/today works immediately.
    */
+  /** Returns the authenticated user's profile including their planId. */
+  async getMe(userId: string): Promise<{ id: string; planId: string | null }> {
+    const db = this.supabase.getClient();
+
+    const { data: userRow } = await db
+      .from('users')
+      .select('id, plan_id')
+      .eq('id', userId)
+      .is('archived_at', null)
+      .single();
+
+    if (!userRow) {
+      return { id: userId, planId: null };
+    }
+
+    let planId = (userRow as { id: string; plan_id: string | null }).plan_id;
+
+    // If user has no plan, default to the 1yr plan
+    if (!planId) {
+      const { data: defaultPlan } = await db
+        .from('plans')
+        .select('id')
+        .eq('name', '1 year plan')
+        .limit(1)
+        .single();
+      planId = defaultPlan ? (defaultPlan as { id: string }).id : null;
+    }
+
+    return { id: userId, planId };
+  }
+
   async createGuest(): Promise<{ guestToken: string; createdAt: string }> {
     const db = this.supabase.getClient();
 
