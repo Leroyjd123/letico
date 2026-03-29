@@ -1,0 +1,80 @@
+/* globals.css — CSS reset and base styles
+ *
+ * All colours, spacing, and radii use CSS custom properties from tokens.ts.
+ * This file contains NO hardcoded hex values.
+ */
+
+/* Box model reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Base typography */
+body {
+  font-family: var(--font-body);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Remove default link styling */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Remove default button styling */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* Remove default list styling */
+ul,
+ol {
+  list-style: none;
+}
+
+/* Images */
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* Input reset */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+/* Focus ring — only visible on keyboard navigation (not mouse clicks) */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Page layout */
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+}

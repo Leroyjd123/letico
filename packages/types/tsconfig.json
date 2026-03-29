@@ -1,0 +1,10 @@
+{
+  "extends": "@lectio/tsconfig/base.json",
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "commonjs",
+    "lib": ["esnext"],
+    "outDir": "./dist"
+  },
+  "include": ["src"]
+}
