@@ -33,11 +33,11 @@
 
 | Field | Value |
 | --- | --- |
-| **Active Phase** | Phase 5 — Auth & Migration |
-| **Last Completed Phase** | Phase 4 — Guest Mode & Offline |
+| **Active Phase** | Phase 6 — Analytics |
+| **Last Completed Phase** | Phase 5 — Auth & Migration |
 | **Last Updated By** | Claude Sonnet 4.6 |
 | **Last Updated On** | 2026-03-30 |
-| **Next Step** | Implement Phase 5: email OTP sign-in, guest migration, Supabase Realtime |
+| **Next Step** | Implement Phase 6: GET /progress/summary, /analytics page, StatusCard, StatCard, ProgressGraph |
 
 ---
 
@@ -135,15 +135,27 @@
 | [x] | `PlanPageClient.tsx` updated — uses `useAuthContext()` from `AuthProvider` | Claude Sonnet 4.6 | 2026-03-30 |
 | [x] | `apps/api/src/auth/auth.service.spec.ts` — 5 tests for `createGuest`; 27 API tests passing total | Claude Sonnet 4.6 | 2026-03-30 |
 
-**Commit:** pending
+**Commit:** `8c6fb17` — 15 files, 1,306 insertions. 27 API tests passing.
 
 ---
 
-## Phase 5 — Auth & Migration _(not started)_
+## Phase 5 — Auth & Migration
 
 **Goal:** Users sign in with email OTP; guest progress migrates to their account.
 
-Tasks: See `02_PHASE_BREAKDOWN.md` § Phase 5.
+| Status | Task | Agent | Date |
+| --- | --- | --- | --- |
+| [x] | `sendOtp` + `verifyOtp` + `migrateGuest` in `auth.service.ts` | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `POST /auth/otp/send`, `POST /auth/otp/verify`, `POST /auth/migrate` routes in `auth.controller.ts` | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `packages/types` — `refreshToken` added to `OtpVerifyResult` | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `/login` page — 2-step OTP form; `supabase.auth.setSession` → migrate guest → clear token → `/read` | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `/settings` page — signed-in email, sign-in link for guests, sign-out button | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `useRealtimeSync` hook — Realtime INSERT subscription, query cache update + progress invalidation | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `BottomNav` component — read / plan / settings; hidden on /login | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `AuthProvider` wires `useRealtimeSync`; `layout.tsx` adds `BottomNav` + `body paddingBottom` | Claude Sonnet 4.6 | 2026-03-30 |
+| [x] | `auth.service.spec.ts` extended — 15 new tests (sendOtp, verifyOtp, migrateGuest); 37 total passing | Claude Sonnet 4.6 | 2026-03-30 |
+
+**Commit:** pending
 
 ---
 
@@ -369,3 +381,4 @@ _Add new agents here when they first contribute to the project._
 | 1.1 | 2026-03-30 | Claude Sonnet 4.6 | Added ISSUE-001–003, DISCUSSION-001–002 |
 | 1.2 | 2026-03-30 | Claude Sonnet 4.6 | Added DISCUSSION-003–013 (all March 29 architectural decisions) |
 | 1.3 | 2026-03-30 | Claude Sonnet 4.6 | Phase 4 complete — guest auto-provisioning, offline queue, nudge, 27 tests passing |
+| 1.4 | 2026-03-30 | Claude Sonnet 4.6 | Phase 5 complete — OTP sign-in, guest migration, Realtime, BottomNav, 37 tests passing |

@@ -92,6 +92,7 @@ export interface OtpSendResult {
 
 export interface OtpVerifyResult {
   accessToken: string;
+  refreshToken: string;
   user: {
     id: string;
     email: string;

@@ -3,14 +3,14 @@
  * AuthProvider.tsx
  *
  * Wraps the app with auth state from useAuth().
- * All client components read auth via useAuthContext() from this module —
- * never call useAuth() directly in leaf components.
+ * Also activates useRealtimeSync for authenticated users (Phase 5).
  *
- * Exported useAuthContext() is the single auth access point for all pages.
+ * All client components read auth via useAuthContext() from this module.
  */
 import { createContext, useContext } from 'react';
 import type { AuthContext } from '../../lib/api';
 import { useAuth } from '../../hooks/useAuth';
+import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 
 interface AuthContextValue {
   auth: AuthContext | null;
@@ -22,11 +22,17 @@ const AuthCtx = createContext<AuthContextValue>({
   isProvisioning: false,
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+function AuthProviderInner({ children }: { children: React.ReactNode }) {
   const { auth, isProvisioning } = useAuth();
+  // Realtime subscription starts automatically on sign-in; no-ops for guests
+  useRealtimeSync(auth);
   return (
     <AuthCtx.Provider value={{ auth, isProvisioning }}>{children}</AuthCtx.Provider>
   );
+}
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return <AuthProviderInner>{children}</AuthProviderInner>;
 }
 
 export function useAuthContext(): AuthContextValue {

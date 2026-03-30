@@ -6,12 +6,15 @@
  * - Inject CSS custom property tokens into :root via buildCssTokenString()
  * - Apply font variables to <body>
  * - Wrap children in QueryProvider for React Query
+ * - Wrap children in AuthProvider for auth state + Realtime sync
+ * - Render BottomNav (client component — hides itself on /login)
  */
 import type { Metadata } from 'next';
 import { Manrope, Inter } from 'next/font/google';
 import { buildCssTokenString } from '@lectio/types/tokens';
 import { QueryProvider } from '../components/providers/QueryProvider';
 import { AuthProvider } from '../components/providers/AuthProvider';
+import { BottomNav } from '../components/layout/BottomNav';
 import './globals.css';
 
 const manrope = Manrope({
@@ -50,9 +53,12 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>
+      <body style={{ paddingBottom: '3.5rem' }}>
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <BottomNav />
+          </AuthProvider>
         </QueryProvider>
       </body>
     </html>

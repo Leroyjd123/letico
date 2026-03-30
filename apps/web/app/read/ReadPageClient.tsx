@@ -317,8 +317,7 @@ export function ReadPageClient() {
             onDismiss={() => setShowNudge(false)}
             onSignIn={() => {
               setShowNudge(false);
-              // Phase 5: navigate to /auth/sign-in
-              window.location.href = '/auth/sign-in';
+              window.location.href = '/login';
             }}
           />
         )}
