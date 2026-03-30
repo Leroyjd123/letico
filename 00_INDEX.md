@@ -20,6 +20,7 @@
 | 09 | [Component Library](./09_COMPONENT_LIBRARY.md) | All UI components — props, states, interaction rules, Storybook stories |
 | 10 | [Environment & Deployment](./10_ENVIRONMENT_AND_DEPLOYMENT.md) | Local setup, Supabase config, CI/CD, production deployment |
 | 11 | [Implementation Plan](./11_IMPLEMENTATION_PLAN.md) | Step-by-step build plan — all 7 phases, task sequences, file lists, test points, exit invariants |
+| 12 | [Progress Log](./12_PROGRESS_LOG.md) | Live changelog — completed tasks by phase, agent attribution, current status, next step |
 
 ---
 

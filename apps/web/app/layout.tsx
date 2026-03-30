@@ -11,6 +11,7 @@ import type { Metadata } from 'next';
 import { Manrope, Inter } from 'next/font/google';
 import { buildCssTokenString } from '@lectio/types/tokens';
 import { QueryProvider } from '../components/providers/QueryProvider';
+import { AuthProvider } from '../components/providers/AuthProvider';
 import './globals.css';
 
 const manrope = Manrope({
@@ -50,7 +51,9 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );

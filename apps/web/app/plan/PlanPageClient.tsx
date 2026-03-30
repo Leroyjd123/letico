@@ -15,7 +15,7 @@
  */
 import { useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useAuthContext } from '../../lib/useAuthContext';
+import { useAuthContext } from '../../components/providers/AuthProvider';
 import type { AuthContext } from '../../lib/api';
 import { PlanDayRow } from '../../components/plan/PlanDayRow';
 
@@ -56,7 +56,7 @@ function authKey(auth: AuthContext | null): string {
 }
 
 export function PlanPageClient() {
-  const auth = useAuthContext();
+  const { auth } = useAuthContext();
   const todayRowRef = useRef<HTMLDivElement | null>(null);
 
   // ── Resolve user's planId ─────────────────────────────────────────────────

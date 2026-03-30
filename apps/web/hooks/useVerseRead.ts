@@ -4,34 +4,45 @@
  *
  * Optimistic mutation hook for all verse-read write operations.
  *
- * Query key ['verse-reads', authId] holds a Set<number> of read verse IDs.
- * On mutate: snapshot → optimistically add IDs → submit to API.
- * On error: restore snapshot.
- * On settled: invalidate progress and plan queries to refetch real state.
+ * Write flow (Task 4.4):
+ *   1. Optimistic update — always. The tile turns read immediately.
+ *   2. Enqueue to IndexedDB — always. Reads are never lost.
+ *   3. If online AND auth present: call API immediately, then markSynced.
+ *      If offline: skip API call. useOfflineQueue flushes on reconnect.
+ *   4. On API error: leave item in IndexedDB (synced=false). Will retry on reconnect.
+ *   5. After write: invalidate progress + plan queries.
  *
- * Offline: if navigator.onLine is false, writes to IndexedDB queue instead.
+ * Invariant (from implementation plan):
+ *   The optimistic update MUST happen immediately regardless of network state.
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { markVersesRead } from '../lib/api';
 import type { AuthContext } from '../lib/api';
-import { queueForOffline } from '../lib/offlineQueue';
+import { enqueueVerseReads, markSynced } from '../lib/offlineQueue';
 
 function authId(auth: AuthContext | null): string {
   if (!auth) return 'anon';
   return auth.type === 'bearer' ? `b:${auth.token.slice(-8)}` : `g:${auth.guestToken.slice(-8)}`;
 }
 
-export function useVerseRead(auth: AuthContext | null) {
+export interface UseVerseReadResult {
+  markChapter: (verseIds: number[]) => void;
+  markRange: (verseIds: number[]) => void;
+  markDayComplete: (verseIds: number[]) => void;
+  isPending: boolean;
+}
+
+export function useVerseRead(auth: AuthContext | null): UseVerseReadResult {
   const queryClient = useQueryClient();
   const queryKey = ['verse-reads', authId(auth)] as const;
+  const [isPending, setIsPending] = useState(false);
 
-  const mutation = useMutation({
-    mutationFn: (verseIds: number[]) => {
-      if (!auth) throw new Error('No auth context — cannot mark verses read');
-      return markVersesRead(verseIds, auth);
-    },
+  function submit(verseIds: number[]): void {
+    if (!verseIds.length) return;
 
-    onMutate: async (verseIds: number[]) => {
+    void (async () => {
+      // ── Step 1: Optimistic update ────────────────────────────────────────────
       await queryClient.cancelQueries({ queryKey: ['progress'] });
 
       const previousSet = queryClient.getQueryData<Set<number>>(queryKey);
@@ -39,34 +50,38 @@ export function useVerseRead(auth: AuthContext | null) {
       verseIds.forEach((id) => newSet.add(id));
       queryClient.setQueryData(queryKey, newSet);
 
-      return { previousSet };
-    },
+      // ── Step 2: Always enqueue to IndexedDB ──────────────────────────────────
+      const enqueued = await enqueueVerseReads(verseIds);
+      // enqueued.dropped === true means the queue is full (10k cap).
+      // The optimistic update still happened; the read just won't sync.
 
-    onError: (_err, _verseIds, context) => {
-      if (context?.previousSet !== undefined) {
-        queryClient.setQueryData(queryKey, context.previousSet);
+      // ── Step 3: If online, call API immediately ───────────────────────────────
+      if (typeof navigator !== 'undefined' && navigator.onLine && auth) {
+        setIsPending(true);
+        try {
+          await markVersesRead(verseIds, auth);
+          // On success: mark the queued item as synced so flush skips it
+          if (!enqueued.dropped) {
+            await markSynced([enqueued.id]);
+          }
+        } catch {
+          // API failed — leave the IndexedDB item unsynced.
+          // useOfflineQueue will retry when connectivity returns.
+        } finally {
+          setIsPending(false);
+        }
       }
-    },
 
-    onSettled: () => {
+      // ── Step 4: Refresh derived queries ──────────────────────────────────────
       void queryClient.invalidateQueries({ queryKey: ['progress'] });
       void queryClient.invalidateQueries({ queryKey: ['plan'] });
-    },
-  });
-
-  function submit(verseIds: number[]) {
-    if (!verseIds.length) return;
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      void queueForOffline(verseIds);
-      return;
-    }
-    mutation.mutate(verseIds);
+    })();
   }
 
   return {
     markChapter: submit,
     markRange: submit,
     markDayComplete: submit,
-    isPending: mutation.isPending,
+    isPending,
   };
 }

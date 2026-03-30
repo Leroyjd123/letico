@@ -136,10 +136,12 @@ export class ProgressService {
 
     if (readIds.length > 0) {
       // Filter out already-read verses
-      query = (query as ReturnType<typeof db.from>).not('id', 'in', `(${readIds.join(',')})`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      query = (query as any).not('id', 'in', `(${readIds.join(',')})`);
     }
 
-    const { data: nextVerse } = await (query as ReturnType<typeof db.from>).single();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: nextVerse } = await (query as any).single();
 
     if (!nextVerse) return null; // All done!
 

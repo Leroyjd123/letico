@@ -5,29 +5,35 @@
  * Client shell for the /read page.
  *
  * Data flow:
- *   1. useAuthContext() → AuthContext (bearer JWT or guest token from localStorage)
- *   2. If no auth → provision a guest via POST /auth/guest
+ *   1. useAuthContext() → { auth, isProvisioning } (auto-provisions guest on first visit)
+ *   2. useOfflineQueue(auth) → flush pending reads + show failure banner
  *   3. useQuery ['plan','today'] → PlanDayView
  *   4. useQuery ['bible','chapters', book] → Chapter[]
  *   5. useQuery ['progress','reads'] → number[] (read verse IDs in today's range)
  *   6. useContinueReading → ContinuePosition | null
  *
- * Architectural invariant: all writes go through useVerseRead → POST /progress/verses.
- * No other write path exists.
+ * Guest backup nudge: shown once per session after ≥ 10 chapters are marked read.
+ *
+ * Architectural invariants:
+ *   - All writes go through useVerseRead → POST /progress/verses (or offline queue)
+ *   - Never renders Bible text inline (R7)
+ *   - No gamification, no pressure language (R3, R4)
  */
-import { useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { PlanDayView, Chapter } from '@lectio/types';
-import { getPlanToday, getChapters, createGuest } from '../../lib/api';
+import { getPlanToday, getChapters } from '../../lib/api';
 import type { AuthContext } from '../../lib/api';
-import { useAuthContext, storeGuestToken } from '../../lib/useAuthContext';
+import { useAuthContext } from '../../components/providers/AuthProvider';
 import { useVerseRead } from '../../hooks/useVerseRead';
+import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 import { useContinueReading } from '../../hooks/useContinueReading';
 import { TodayCard } from '../../components/reader/TodayCard';
 import { ChapterGrid, type ChapterGridItem } from '../../components/reader/ChapterGrid';
 import { VerseSelectorModal } from '../../components/modals/VerseSelectorModal';
 import { OpenInJWButton } from '../../components/reader/OpenInJWButton';
 import { ContinuePill } from '../../components/reader/ContinuePill';
+import { GuestBackupNudge, shouldShowNudge } from '../../components/reader/GuestBackupNudge';
 import type { ReadState } from '../../components/reader/ChapterTile';
 
 const BASE_URL =
@@ -64,29 +70,32 @@ function authKey(auth: AuthContext | null): string {
   return auth.type === 'bearer' ? `b:${auth.token.slice(-8)}` : `g:${auth.guestToken.slice(-8)}`;
 }
 
+const NUDGE_CHAPTER_THRESHOLD = 10;
+
 export function ReadPageClient() {
-  const auth = useAuthContext();
-  const queryClient = useQueryClient();
+  const { auth, isProvisioning } = useAuthContext();
+  const { hasPermanentFailure } = useOfflineQueue(auth);
   const { markChapter, markDayComplete } = useVerseRead(auth);
   const continuePosition = useContinueReading(auth);
 
-  const [provisioning, setProvisioning] = useState(false);
   const [modalState, setModalState] = useState<{
     chapterItem: ChapterGridItem;
     chapter: Chapter;
   } | null>(null);
 
-  // ── Guest provisioning ────────────────────────────────────────────────────
-  async function ensureAuth(): Promise<void> {
-    if (auth !== null || provisioning) return;
-    setProvisioning(true);
-    try {
-      const guest = await createGuest();
-      storeGuestToken(guest.guestToken);
-      // Invalidate to trigger re-auth detection
-      await queryClient.invalidateQueries({ queryKey: ['plan'] });
-    } finally {
-      setProvisioning(false);
+  // ── Guest backup nudge ────────────────────────────────────────────────────
+  const sessionChaptersRead = useRef(0);
+  const [showNudge, setShowNudge] = useState(false);
+
+  function incrementChapterCount() {
+    sessionChaptersRead.current += 1;
+    if (
+      auth?.type === 'guest' &&
+      sessionChaptersRead.current >= NUDGE_CHAPTER_THRESHOLD &&
+      shouldShowNudge() &&
+      !showNudge
+    ) {
+      setShowNudge(true);
     }
   }
 
@@ -134,7 +143,6 @@ export function ReadPageClient() {
   const chapterItems = useMemo((): ChapterGridItem[] => {
     if (!planDay || !allChapters) return [];
 
-    // Chapters in today's range: from planDay.chapter up to a reasonable window
     const relevantChapters = allChapters.filter(
       (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 8,
     );
@@ -165,6 +173,7 @@ export function ReadPageClient() {
     void (async () => {
       const verses = await fetchVerseIds(item.chapterId);
       markChapter(verses.map((v) => v.id));
+      incrementChapterCount();
     })();
   }
 
@@ -177,6 +186,8 @@ export function ReadPageClient() {
   function handleMarkFull() {
     if (!modalState || !modalVerses) return;
     markChapter((modalVerses as Array<{ id: number }>).map((v) => v.id));
+    incrementChapterCount();
+    setModalState(null);
   }
 
   function handleSaveRange(startVerse: number, endVerse: number) {
@@ -185,10 +196,10 @@ export function ReadPageClient() {
       .filter((v) => v.number >= startVerse && v.number <= endVerse)
       .map((v) => v.id);
     markChapter(ids);
+    setModalState(null);
   }
 
   function handleMarkDayComplete() {
-    void ensureAuth();
     void (async () => {
       if (!planDay || !allChapters) return;
       const chaptersInRange = allChapters.filter(
@@ -203,7 +214,7 @@ export function ReadPageClient() {
     })();
   }
 
-  // ── Auth / loading states ─────────────────────────────────────────────────
+  // ── Loading states ────────────────────────────────────────────────────────
   if (auth === null) {
     return (
       <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
@@ -213,36 +224,24 @@ export function ReadPageClient() {
             color: 'var(--color-text-muted)',
             fontSize: '0.9375rem',
             textTransform: 'lowercase',
-            marginBottom: 'var(--space-4)',
           }}
         >
-          {provisioning ? 'setting up your reading…' : 'welcome to lectio'}
+          {isProvisioning ? 'setting up your reading…' : 'loading…'}
         </p>
-        {!provisioning && (
-          <button
-            onClick={() => void ensureAuth()}
-            style={{
-              fontFamily: 'var(--font-headline)',
-              fontSize: '1rem',
-              color: 'var(--color-primary)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              textTransform: 'lowercase',
-              padding: 'var(--space-2) var(--space-4)',
-            }}
-          >
-            start reading
-          </button>
-        )}
       </div>
     );
   }
 
   if (planLoading || !planDay) {
     return (
-      <div style={{ padding: 'var(--space-8) var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div
+        style={{
+          padding: 'var(--space-8) var(--space-6)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-4)',
+        }}
+      >
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
         {[140, 200].map((h, i) => (
           <div
@@ -270,6 +269,24 @@ export function ReadPageClient() {
 
   return (
     <>
+      {/* Permanent sync failure banner */}
+      {hasPermanentFailure && (
+        <div
+          role="alert"
+          style={{
+            padding: 'var(--space-3) var(--space-6)',
+            backgroundColor: 'var(--color-bg-surface)',
+            borderBottom: '1px solid var(--color-outline)',
+            fontFamily: 'var(--font-body)',
+            fontSize: '0.8125rem',
+            color: 'var(--color-text-muted)',
+            textAlign: 'center',
+          }}
+        >
+          some reading couldn't sync — it's saved locally and will retry automatically
+        </div>
+      )}
+
       <div
         style={{
           maxWidth: '36rem',
@@ -293,6 +310,18 @@ export function ReadPageClient() {
         >
           lectio
         </h1>
+
+        {/* Guest backup nudge — one per session, after 10 chapters */}
+        {showNudge && (
+          <GuestBackupNudge
+            onDismiss={() => setShowNudge(false)}
+            onSignIn={() => {
+              setShowNudge(false);
+              // Phase 5: navigate to /auth/sign-in
+              window.location.href = '/auth/sign-in';
+            }}
+          />
+        )}
 
         <TodayCard
           dayNumber={planDay.dayNumber}

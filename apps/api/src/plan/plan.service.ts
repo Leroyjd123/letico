@@ -213,7 +213,8 @@ export class PlanService {
       throw new Error(`Failed to resolve verse context for verse ${verseId}`);
     }
 
-    const v = data as {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v = data as unknown as {
       number: number;
       chapters: { number: number; books: { name: string; usfm_code: string } };
     };
