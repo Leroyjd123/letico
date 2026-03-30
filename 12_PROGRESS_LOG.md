@@ -155,7 +155,7 @@
 | [x] | `AuthProvider` wires `useRealtimeSync`; `layout.tsx` adds `BottomNav` + `body paddingBottom` | Claude Sonnet 4.6 | 2026-03-30 |
 | [x] | `auth.service.spec.ts` extended — 15 new tests (sendOtp, verifyOtp, migrateGuest); 37 total passing | Claude Sonnet 4.6 | 2026-03-30 |
 
-**Commit:** pending
+**Commit:** `ec8dc6e` — 14 files, 1,131 insertions. 37 API tests passing.
 
 ---
 
