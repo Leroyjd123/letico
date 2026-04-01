@@ -216,4 +216,343 @@ describe('ProgressService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('getProgressSummary', () => {
+    // Pin "today" to 2026-04-01 UTC for all streak / ahead-behind tests
+    beforeAll(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
+    });
+    afterAll(() => {
+      jest.useRealTimers();
+    });
+
+    /**
+     * Builds a mock Supabase client for getProgressSummary.
+     *
+     * Call order inside the service:
+     *   1. verse_reads — count query          (chain ends at .eq → { count })
+     *   2. verse_reads — read_at query        (chain ends at .order → { data })
+     *   3. users       — plan info            (chain ends at .single → { data })
+     *   4. plan_days   — days up to today     (chain ends at .order → { data })   [optional]
+     *   5. rpc         — verses read in range                                     [optional]
+     */
+    function buildSummaryMockClient({
+      verseCount,
+      readDates,
+      userRow,
+      planDays = [],
+      versesReadInRange = 0,
+    }: {
+      verseCount: number;
+      readDates: Array<{ read_at: string }>;
+      userRow: { plan_id: string | null; plan_start_date: string | null } | null;
+      planDays?: Array<{ start_global_order: number; end_global_order: number }>;
+      versesReadInRange?: number;
+    }) {
+      const verseReadsChains = [
+        // Call 1 — count query; chain ends at .eq()
+        {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockResolvedValue({ count: verseCount, error: null }),
+        },
+        // Call 2 — read_at query; chain ends at .order()
+        {
+          select: jest.fn().mockReturnThis(),
+          eq: jest.fn().mockReturnThis(),
+          order: jest.fn().mockResolvedValue({ data: readDates, error: null }),
+        },
+      ];
+      let verseReadsIdx = 0;
+
+      return {
+        from: jest.fn().mockImplementation((table: string) => {
+          if (table === 'verse_reads') {
+            return verseReadsChains[verseReadsIdx++];
+          }
+          if (table === 'users') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              is: jest.fn().mockReturnThis(),
+              single: jest.fn().mockResolvedValue({ data: userRow, error: null }),
+            };
+          }
+          if (table === 'plan_days') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              lte: jest.fn().mockReturnThis(),
+              order: jest.fn().mockResolvedValue({ data: planDays, error: null }),
+            };
+          }
+          return {};
+        }),
+        rpc: jest.fn().mockResolvedValue({ data: versesReadInRange, error: null }),
+      };
+    }
+
+    // ── completionPct ────────────────────────────────────────────────────────
+
+    it('completionPct = 0 when no verses read', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 0,
+        readDates: [],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.totalVersesRead).toBe(0);
+      expect(result.completionPct).toBe(0);
+    });
+
+    it('completionPct = 100 when all 31102 verses read', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 31102,
+        readDates: [],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.completionPct).toBe(100);
+    });
+
+    it('completionPct = 50 for exactly half the Bible', async () => {
+      // 15551 / 31102 × 10000 = 4999.8… → round → 5000 → /100 = 50
+      const mockClient = buildSummaryMockClient({
+        verseCount: 15551,
+        readDates: [],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.completionPct).toBe(50);
+    });
+
+    // ── streak ───────────────────────────────────────────────────────────────
+
+    it('streakDays = 0 when no reads at all', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 0,
+        readDates: [],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.streakDays).toBe(0);
+    });
+
+    it('streakDays = 0 when last read was 2+ days ago', async () => {
+      // today = 2026-04-01; last read = 2026-03-29 (3 days ago)
+      const mockClient = buildSummaryMockClient({
+        verseCount: 5,
+        readDates: [
+          { read_at: '2026-03-29T10:00:00.000Z' },
+          { read_at: '2026-03-29T09:00:00.000Z' },
+        ],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.streakDays).toBe(0);
+    });
+
+    it('streakDays = 1 when reads exist only today', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 3,
+        readDates: [{ read_at: '2026-04-01T08:00:00.000Z' }],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.streakDays).toBe(1);
+    });
+
+    it('streakDays = 3 for 3 consecutive days ending today', async () => {
+      // today = 2026-04-01; reads on Apr 1, Mar 31, Mar 30
+      const mockClient = buildSummaryMockClient({
+        verseCount: 10,
+        readDates: [
+          { read_at: '2026-04-01T10:00:00.000Z' },
+          { read_at: '2026-03-31T10:00:00.000Z' },
+          { read_at: '2026-03-30T10:00:00.000Z' },
+        ],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.streakDays).toBe(3);
+    });
+
+    it('streakDays = 2 for 2 consecutive days ending yesterday (not today)', async () => {
+      // today = 2026-04-01; reads on Mar 31, Mar 30 — streak still counts
+      const mockClient = buildSummaryMockClient({
+        verseCount: 8,
+        readDates: [
+          { read_at: '2026-03-31T10:00:00.000Z' },
+          { read_at: '2026-03-30T10:00:00.000Z' },
+        ],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.streakDays).toBe(2);
+    });
+
+    it('streakDays resets correctly when there is a gap in reads', async () => {
+      // today = 2026-04-01; reads on Apr 1, Mar 30 (gap on Mar 31) → streak = 1
+      const mockClient = buildSummaryMockClient({
+        verseCount: 6,
+        readDates: [
+          { read_at: '2026-04-01T10:00:00.000Z' },
+          { read_at: '2026-03-30T10:00:00.000Z' },
+        ],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.streakDays).toBe(1);
+    });
+
+    // ── aheadBehindVerses ────────────────────────────────────────────────────
+
+    it('aheadBehindVerses = null when user has no plan', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 50,
+        readDates: [],
+        userRow: { plan_id: null, plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.aheadBehindVerses).toBeNull();
+    });
+
+    it('aheadBehindVerses = null when plan has no start date', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 50,
+        readDates: [],
+        userRow: { plan_id: 'plan-1', plan_start_date: null },
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.aheadBehindVerses).toBeNull();
+    });
+
+    it('aheadBehindVerses = 0 when exactly on plan', async () => {
+      // today = 2026-04-01 = plan start → expectedDayNumber = 1
+      // plan day 1 covers verses 1–100 → expectedVerseCount = 100
+      // user has read exactly 100 → diff = 0
+      const mockClient = buildSummaryMockClient({
+        verseCount: 100,
+        readDates: [],
+        userRow: { plan_id: 'plan-1', plan_start_date: '2026-04-01' },
+        planDays: [{ start_global_order: 1, end_global_order: 100 }],
+        versesReadInRange: 100,
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.aheadBehindVerses).toBe(0);
+    });
+
+    it('aheadBehindVerses > 0 when ahead of plan', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 120,
+        readDates: [],
+        userRow: { plan_id: 'plan-1', plan_start_date: '2026-04-01' },
+        planDays: [{ start_global_order: 1, end_global_order: 100 }],
+        versesReadInRange: 120,
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.aheadBehindVerses).toBe(20);
+    });
+
+    it('aheadBehindVerses < 0 when behind plan', async () => {
+      const mockClient = buildSummaryMockClient({
+        verseCount: 80,
+        readDates: [],
+        userRow: { plan_id: 'plan-1', plan_start_date: '2026-04-01' },
+        planDays: [{ start_global_order: 1, end_global_order: 100 }],
+        versesReadInRange: 80,
+      });
+      await createService(mockClient);
+      const result = await service.getProgressSummary(USER_ID);
+      expect(result.aheadBehindVerses).toBe(-20);
+    });
+  });
+
+  describe('getDailyCounts', () => {
+    // Pin today to 2026-04-01 UTC so date bucketing is deterministic
+    beforeAll(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
+    });
+    afterAll(() => {
+      jest.useRealTimers();
+    });
+
+    function buildDailyCountsMockClient(readDates: Array<{ read_at: string }>) {
+      return {
+        from: jest.fn().mockImplementation((table: string) => {
+          if (table === 'verse_reads') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockResolvedValue({ data: readDates, error: null }),
+            };
+          }
+          return {};
+        }),
+      };
+    }
+
+    it('returns N entries for N days requested', async () => {
+      const mockClient = buildDailyCountsMockClient([]);
+      await createService(mockClient);
+      const result = await service.getDailyCounts(USER_ID, 7);
+      expect(result).toHaveLength(7);
+    });
+
+    it('returns all zeros when no reads exist', async () => {
+      const mockClient = buildDailyCountsMockClient([]);
+      await createService(mockClient);
+      const result = await service.getDailyCounts(USER_ID, 7);
+      expect(result.every((d) => d.count === 0)).toBe(true);
+    });
+
+    it('result is sorted in ascending date order', async () => {
+      const mockClient = buildDailyCountsMockClient([]);
+      await createService(mockClient);
+      const result = await service.getDailyCounts(USER_ID, 7);
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i]!.date > result[i - 1]!.date).toBe(true);
+      }
+    });
+
+    it('counts reads correctly for dates within the window', async () => {
+      // today = 2026-04-01; 7-day window = 2026-03-26 to 2026-04-01
+      const mockClient = buildDailyCountsMockClient([
+        { read_at: '2026-04-01T09:00:00.000Z' },
+        { read_at: '2026-04-01T10:00:00.000Z' },
+        { read_at: '2026-03-31T08:00:00.000Z' },
+      ]);
+      await createService(mockClient);
+      const result = await service.getDailyCounts(USER_ID, 7);
+      const apr1 = result.find((d) => d.date === '2026-04-01');
+      const mar31 = result.find((d) => d.date === '2026-03-31');
+      const mar30 = result.find((d) => d.date === '2026-03-30');
+      expect(apr1?.count).toBe(2);
+      expect(mar31?.count).toBe(1);
+      expect(mar30?.count).toBe(0);
+    });
+
+    it('ignores reads outside the requested date window', async () => {
+      // 2026-03-25 is outside a 7-day window ending 2026-04-01
+      const mockClient = buildDailyCountsMockClient([
+        { read_at: '2026-03-25T10:00:00.000Z' },
+      ]);
+      await createService(mockClient);
+      const result = await service.getDailyCounts(USER_ID, 7);
+      expect(result.every((d) => d.count === 0)).toBe(true);
+    });
+  });
 });

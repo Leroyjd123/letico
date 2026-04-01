@@ -37,6 +37,9 @@ export const COLOR_TOKENS = {
 
   // Ghost border (high-density fallback only)
   ghostBorder: 'rgba(195,200,192,0.2)',
+
+  // Analytics
+  statCardBg: 'rgba(227,226,223,0.35)',
 } as const;
 
 export const SPACE_TOKENS = {

@@ -33,11 +33,11 @@
 
 | Field | Value |
 | --- | --- |
-| **Active Phase** | Phase 6 — Analytics |
-| **Last Completed Phase** | Phase 5 — Auth & Migration |
+| **Active Phase** | Phase 7 — Polish & Hardening |
+| **Last Completed Phase** | Phase 6 — Analytics |
 | **Last Updated By** | Claude Sonnet 4.6 |
-| **Last Updated On** | 2026-03-30 |
-| **Next Step** | Implement Phase 6: GET /progress/summary, /analytics page, StatusCard, StatCard, ProgressGraph |
+| **Last Updated On** | 2026-04-01 |
+| **Next Step** | Implement Phase 7: Storybook stories, accessibility audit, settings plan/theme/reset/export, E2E tests, Lighthouse |
 
 ---
 
@@ -159,11 +159,27 @@
 
 ---
 
-## Phase 6 — Analytics _(not started)_
+## Phase 6 — Analytics
 
 **Goal:** Calm, honest reading stats. No gamification.
 
-Tasks: See `02_PHASE_BREAKDOWN.md` § Phase 6.
+| Status | Task | Agent | Date |
+| --- | --- | --- | --- |
+| [x] | `getProgressSummary` — streak calculation (UTC calendar days, server-side) | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `getProgressSummary` — ahead/behind verses vs plan range | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `GET /progress/daily-counts?days=N` endpoint + `getDailyCounts` service method | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `DailyCountDto` in `progress.types.ts`; `DailyCount` interface in `@lectio/types` | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `getDailyCounts()` in `apps/web/lib/api.ts` | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `statCardBg` token added to `packages/types/src/tokens.ts` | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `StatusCard` component — neutral ahead/behind language, returns null when no plan | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `StatCard` component — label + large value display | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `ProgressGraph` component — 7-day SVG line chart, day-of-week labels | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `AnalyticsPageClient` — auth context, two React Query fetches, loading skeleton, empty state | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `/analytics` page with metadata | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | `BottomNav` updated — analytics tab (`⊠`) added between plan and settings | Claude Sonnet 4.6 | 2026-04-01 |
+| [x] | 19 new tests: `getProgressSummary` (completionPct, streak, ahead/behind) + `getDailyCounts` — 56 API tests passing total | Claude Sonnet 4.6 | 2026-04-01 |
+
+**Commit:** _(see git log)_
 
 ---
 
@@ -382,3 +398,4 @@ _Add new agents here when they first contribute to the project._
 | 1.2 | 2026-03-30 | Claude Sonnet 4.6 | Added DISCUSSION-003–013 (all March 29 architectural decisions) |
 | 1.3 | 2026-03-30 | Claude Sonnet 4.6 | Phase 4 complete — guest auto-provisioning, offline queue, nudge, 27 tests passing |
 | 1.4 | 2026-03-30 | Claude Sonnet 4.6 | Phase 5 complete — OTP sign-in, guest migration, Realtime, BottomNav, 37 tests passing |
+| 1.5 | 2026-04-01 | Claude Sonnet 4.6 | Phase 6 complete — analytics screen, streak, ahead/behind, ProgressGraph, BottomNav analytics tab, 56 tests passing |

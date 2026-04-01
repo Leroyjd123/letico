@@ -104,4 +104,9 @@ export interface MigrateGuestResult {
   alreadyMigrated: boolean;
 }
 
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
 export type { };

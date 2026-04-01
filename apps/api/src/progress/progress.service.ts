@@ -15,7 +15,10 @@ import type {
   MarkVersesReadResponseDto,
   ContinuePositionDto,
   ProgressSummaryDto,
+  DailyCountDto,
 } from './progress.types';
+
+const TOTAL_BIBLE_VERSES = 31102;
 
 @Injectable()
 export class ProgressService {
@@ -164,7 +167,6 @@ export class ProgressService {
 
   /**
    * Returns a progress summary for the user.
-   * Streak and ahead/behind calculations are deferred to Phase 6.
    */
   async getProgressSummary(userId: string): Promise<ProgressSummaryDto> {
     const db = this.supabase.getClient();
@@ -175,14 +177,146 @@ export class ProgressService {
       .eq('user_id', userId);
 
     const totalVersesRead = count ?? 0;
-    const completionPct = Math.round((totalVersesRead / 31102) * 10000) / 100;
+    const completionPct = Math.round((totalVersesRead / TOTAL_BIBLE_VERSES) * 10000) / 100;
+
+    // Calculate streak
+    const { data: readDates } = await db
+      .from('verse_reads')
+      .select('read_at')
+      .eq('user_id', userId)
+      .order('read_at', { ascending: false });
+
+    const uniqueUtcDates = Array.from(
+      new Set(
+        (readDates ?? []).map((r: { read_at: string }) => {
+          const d = new Date(r.read_at);
+          return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        })
+      )
+    ).sort((a, b) => b.localeCompare(a));
+
+    let streakDays = 0;
+    const today = new Date();
+    const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(today.getUTCDate() - 1);
+    const yesterdayStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterday.getUTCDate()).padStart(2, '0')}`;
+
+    if (uniqueUtcDates.length > 0) {
+      if (uniqueUtcDates[0] === todayStr) {
+        streakDays = 1;
+        let currentDate = new Date(today);
+        for (let i = 1; i < uniqueUtcDates.length; i++) {
+          currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+          const expectedStr = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, '0')}-${String(currentDate.getUTCDate()).padStart(2, '0')}`;
+          if (uniqueUtcDates[i] === expectedStr) {
+            streakDays++;
+          } else {
+            break;
+          }
+        }
+      } else if (uniqueUtcDates[0] === yesterdayStr) {
+        streakDays = 1;
+        let currentDate = new Date(yesterday);
+        for (let i = 1; i < uniqueUtcDates.length; i++) {
+          currentDate.setUTCDate(currentDate.getUTCDate() - 1);
+          const expectedStr = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, '0')}-${String(currentDate.getUTCDate()).padStart(2, '0')}`;
+          if (uniqueUtcDates[i] === expectedStr) {
+            streakDays++;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    // Calculate ahead/behind
+    let aheadBehindVerses: number | null = null;
+    const { data: userRow } = await db
+      .from('users')
+      .select('plan_id, plan_start_date')
+      .eq('id', userId)
+      .is('archived_at', null)
+      .single();
+
+    if (userRow && (userRow as { plan_id: string | null }).plan_id) {
+      const planId = (userRow as { plan_id: string }).plan_id;
+      const planStartDate = (userRow as { plan_start_date: string | null }).plan_start_date;
+
+      if (planStartDate) {
+        const start = new Date(planStartDate);
+        const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+        const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+        const expectedDayNumber = Math.max(1, Math.min(365, Math.floor((todayUtc - startUtc) / 86400000) + 1));
+
+        const { data: planDays } = await db
+          .from('plan_days')
+          .select('start_global_order, end_global_order')
+          .eq('plan_id', planId)
+          .lte('day_number', expectedDayNumber)
+          .order('day_number', { ascending: true });
+
+        if (planDays && planDays.length > 0) {
+          const days = planDays as Array<{ start_global_order: number; end_global_order: number }>;
+          let expectedVerseCount = 0;
+          for (const d of days) {
+            expectedVerseCount += (d.end_global_order - d.start_global_order + 1);
+          }
+
+          const firstDayStart = days[0]!.start_global_order;
+          const lastDayEnd = days[days.length - 1]!.end_global_order;
+
+          const { data: countData } = await db.rpc('count_verses_read_in_range', {
+            p_user_id: userId,
+            p_start_global_order: firstDayStart,
+            p_end_global_order: lastDayEnd,
+          });
+
+          const versesReadInPlanRange = (countData as number) ?? 0;
+          aheadBehindVerses = versesReadInPlanRange - expectedVerseCount;
+        }
+      }
+    }
 
     return {
       totalVersesRead,
       completionPct,
-      streakDays: 0,         // Phase 6
-      aheadBehindVerses: null, // Phase 6
+      streakDays,
+      aheadBehindVerses,
     };
+  }
+
+  async getDailyCounts(userId: string, days: number): Promise<DailyCountDto[]> {
+    const db = this.supabase.getClient();
+
+    const { data: readDates } = await db
+      .from('verse_reads')
+      .select('read_at')
+      .eq('user_id', userId);
+
+    const countsByDate = new Map<string, number>();
+
+    const today = new Date();
+    for (let i = 0; i < days; i++) {
+      const target = new Date(today);
+      target.setUTCDate(today.getUTCDate() - i);
+      const str = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}-${String(target.getUTCDate()).padStart(2, '0')}`;
+      countsByDate.set(str, 0);
+    }
+
+    if (readDates) {
+      for (const row of readDates) {
+        const d = new Date((row as { read_at: string }).read_at);
+        const str = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        if (countsByDate.has(str)) {
+          countsByDate.set(str, countsByDate.get(str)! + 1);
+        }
+      }
+    }
+
+    return Array.from(countsByDate.entries())
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
   }
 
   /**

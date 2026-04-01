@@ -53,6 +53,16 @@ export class ProgressController {
     return { data };
   }
 
+  /** GET /api/progress/daily-counts?days=N */
+  @Get('daily-counts')
+  async getDailyCounts(
+    @Query('days', ParseIntPipe) days: number,
+    @CurrentUser() user: { id: string },
+  ) {
+    const data = await this.progressService.getDailyCounts(user.id, days);
+    return { data };
+  }
+
   /**
    * GET /api/progress/reads?startVerseId=X&endVerseId=Y
    * Returns read verse IDs for the authenticated user in the given verse range.

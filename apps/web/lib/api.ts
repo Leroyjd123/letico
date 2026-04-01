@@ -21,6 +21,7 @@ import type {
   OtpSendResult,
   OtpVerifyResult,
   MigrateGuestResult,
+  DailyCount,
 } from '@lectio/types';
 
 // ── Error type ───────────────────────────────────────────────────────────────
@@ -166,6 +167,11 @@ export async function getContinuePosition(auth: AuthContext): Promise<ContinuePo
 
 export async function getProgressSummary(auth: AuthContext): Promise<ProgressSummary> {
   const res = await request<{ data: ProgressSummary }>('/progress/summary', { auth });
+  return res.data;
+}
+
+export async function getDailyCounts(days: number, auth: AuthContext): Promise<DailyCount[]> {
+  const res = await request<{ data: DailyCount[] }>(`/progress/daily-counts?days=${days}`, { auth });
   return res.data;
 }
 

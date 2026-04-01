@@ -30,8 +30,11 @@ export interface ContinuePositionDto {
 export interface ProgressSummaryDto {
   totalVersesRead: number;
   completionPct: number;
-  /** Streak calculation is deferred to Phase 6 */
   streakDays: number;
-  /** Ahead/behind is deferred to Phase 6 */
   aheadBehindVerses: number | null;
+}
+
+export interface DailyCountDto {
+  date: string;
+  count: number;
 }
