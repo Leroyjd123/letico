@@ -15,6 +15,7 @@ import { buildCssTokenString } from '@lectio/types/tokens';
 import { QueryProvider } from '../components/providers/QueryProvider';
 import { AuthProvider } from '../components/providers/AuthProvider';
 import { BottomNav } from '../components/layout/BottomNav';
+import { NetworkBanner } from '../components/ui/NetworkBanner';
 import './globals.css';
 
 const manrope = Manrope({
@@ -46,6 +47,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${manrope.variable} ${inter.variable}`}>
       <head>
+        {/* Synchronously restore theme before first paint to prevent flicker */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('lectio_theme');if(t&&t!=='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})()`,
+          }}
+        />
         {/* Inject all design tokens as CSS custom properties on :root */}
         <style
           dangerouslySetInnerHTML={{
@@ -54,6 +61,7 @@ export default function RootLayout({
         />
       </head>
       <body style={{ paddingBottom: '3.5rem' }}>
+        <NetworkBanner />
         <QueryProvider>
           <AuthProvider>
             {children}

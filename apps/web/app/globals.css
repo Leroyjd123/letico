@@ -78,3 +78,72 @@ html {
 body {
   min-height: 100%;
 }
+
+/* ─── Verse range slider thumb ──────────────────────────────────────────────── */
+.verse-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  pointer-events: all;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+
+.verse-range-input::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  pointer-events: all;
+  border: 2px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+
+/* ─── Dark theme ────────────────────────────────────────────────────────────── */
+[data-theme='dark'] {
+  --color-bg-page: #1b1c1a;
+  --color-bg-surface: #2f312f;
+  --color-bg-elevated: #3a3d3a;
+  --color-primary: #b6ccb6;
+  --color-primary-container: #c8d8c8;
+  --color-primary-fixed: #4d614f;
+  --color-on-primary: #1b1c1a;
+  --color-text-primary: #e8e6e1;
+  --color-text-secondary: #b5b3ae;
+  --color-text-muted: #6b6965;
+  --color-text-inverse: #1b1c1a;
+  --color-tertiary: #8ab0c4;
+  --color-tertiary-fixed: #2a3f4a;
+  --color-state-border: rgba(182, 204, 182, 0.1);
+  --color-state-partial-fill: rgba(182, 204, 182, 0.15);
+  --color-ghost-border: rgba(120, 130, 120, 0.2);
+  --color-stat-card-bg: rgba(60, 65, 60, 0.35);
+  --color-overlay: rgba(232, 230, 225, 0.25);
+}
+
+/* ─── Sepia theme ───────────────────────────────────────────────────────────── */
+[data-theme='sepia'] {
+  --color-bg-page: #f5f0e8;
+  --color-bg-surface: #ede8dc;
+  --color-bg-elevated: #faf7f0;
+  --color-primary: #5c6b3a;
+  --color-primary-container: #7a8c4a;
+  --color-primary-fixed: #d8e4c0;
+  --color-on-primary: #ffffff;
+  --color-text-primary: #2c2a25;
+  --color-text-secondary: #5c5850;
+  --color-text-muted: #a09880;
+  --color-text-inverse: #ffffff;
+  --color-tertiary: #6b5a3a;
+  --color-tertiary-fixed: #e8dcc8;
+  --color-state-border: rgba(92, 107, 58, 0.1);
+  --color-state-partial-fill: rgba(92, 107, 58, 0.15);
+  --color-ghost-border: rgba(150, 140, 120, 0.2);
+  --color-stat-card-bg: rgba(220, 215, 200, 0.35);
+  --color-overlay: rgba(44, 42, 37, 0.25);
+}

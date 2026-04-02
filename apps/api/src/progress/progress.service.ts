@@ -16,6 +16,8 @@ import type {
   ContinuePositionDto,
   ProgressSummaryDto,
   DailyCountDto,
+  ResetProgressResponseDto,
+  ExportProgressResponseDto,
 } from './progress.types';
 
 const TOTAL_BIBLE_VERSES = 31102;
@@ -317,6 +319,84 @@ export class ProgressService {
     return Array.from(countsByDate.entries())
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /**
+   * Archives all of the user's verse_reads into archived_verse_reads, then
+   * deletes them from verse_reads.
+   *
+   * NOTE: This operation is non-atomic. The archive insert and the delete are
+   * two separate DB calls. If the archive insert fails, we abort and never
+   * delete — so no progress is lost. However, if the delete fails after a
+   * successful insert, archived rows will exist without the originals being
+   * removed. Callers should surface this as a retryable error.
+   */
+  async resetProgress(userId: string): Promise<ResetProgressResponseDto> {
+    const db = this.supabase.getClient();
+
+    const { data: rows, error: fetchError } = await db
+      .from('verse_reads')
+      .select('verse_id, read_at')
+      .eq('user_id', userId);
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch verse_reads: ${fetchError.message}`);
+    }
+
+    const readRows = (rows ?? []) as Array<{ verse_id: number; read_at: string }>;
+
+    if (readRows.length > 0) {
+      const { error: archiveError } = await db
+        .from('archived_verse_reads')
+        .insert(
+          readRows.map((r) => ({
+            user_id: userId,
+            verse_id: r.verse_id,
+            read_at: r.read_at,
+          })),
+        );
+
+      if (archiveError) {
+        throw new Error(`Failed to archive verse_reads: ${archiveError.message}`);
+      }
+
+      const { error: deleteError } = await db
+        .from('verse_reads')
+        .delete()
+        .eq('user_id', userId);
+
+      if (deleteError) {
+        throw new Error(`Failed to delete verse_reads after archive: ${deleteError.message}`);
+      }
+    }
+
+    return { archivedCount: readRows.length };
+  }
+
+  /**
+   * Returns all verse_reads for the user as a portable export payload.
+   * read_at timestamps are preserved as-is from the database.
+   */
+  async exportProgress(userId: string): Promise<ExportProgressResponseDto> {
+    const db = this.supabase.getClient();
+
+    const { data, error } = await db
+      .from('verse_reads')
+      .select('verse_id, read_at')
+      .eq('user_id', userId)
+      .order('read_at', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to export verse_reads: ${error.message}`);
+    }
+
+    const readRows = (data ?? []) as Array<{ verse_id: number; read_at: string }>;
+
+    return {
+      userId,
+      exportedAt: new Date().toISOString(),
+      verseReads: readRows.map((r) => ({ verseId: r.verse_id, readAt: r.read_at })),
+    };
   }
 
   /**

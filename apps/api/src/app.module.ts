@@ -5,6 +5,7 @@ import { BibleModule } from './bible/bible.module';
 import { AuthModule } from './auth/auth.module';
 import { PlanModule } from './plan/plan.module';
 import { ProgressModule } from './progress/progress.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ProgressModule } from './progress/progress.module';
     AuthModule,
     PlanModule,
     ProgressModule,
+    UsersModule,
   ],
 })
 export class AppModule {}

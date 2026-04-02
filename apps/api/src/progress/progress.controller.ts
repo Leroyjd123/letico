@@ -81,4 +81,23 @@ export class ProgressController {
     );
     return { data };
   }
+
+  /**
+   * POST /api/progress/reset
+   * Archives all verse_reads for the user, then deletes them (non-atomic).
+   * Returns the number of rows archived.
+   */
+  @Post('reset')
+  @HttpCode(HttpStatus.OK)
+  async resetProgress(@CurrentUser() user: { id: string }) {
+    const data = await this.progressService.resetProgress(user.id);
+    return { data };
+  }
+
+  /** GET /api/progress/export — full verse_reads export for the authenticated user */
+  @Get('export')
+  async exportProgress(@CurrentUser() user: { id: string }) {
+    const data = await this.progressService.exportProgress(user.id);
+    return { data };
+  }
 }

@@ -4,6 +4,7 @@
  *
  * Tap: marks entire chapter read.
  * Long-press (600ms): opens the verse selector modal.
+ * Alt+Enter (keyboard): triggers long-press action (verse selector).
  *
  * Uses pointer events (not mouse/touch) for unified desktop + mobile handling.
  * touch-action: manipulation prevents double-tap-to-zoom interference.
@@ -12,7 +13,7 @@
  * Active visual feedback: scale(0.94) on pointer down.
  * Hover hint "hold to select verses" fades in on hover (desktop UX).
  */
-import { useState, useRef, type CSSProperties, type PointerEvent } from 'react';
+import { useState, useRef, type CSSProperties, type PointerEvent, type KeyboardEvent } from 'react';
 
 export type ReadState = 'read' | 'partial' | 'unread' | 'locked';
 
@@ -95,6 +96,13 @@ export function ChapterTile({
     didLongPress.current = false;
   }
 
+  function handleKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
+    if (e.altKey && e.key === 'Enter') {
+      e.preventDefault();
+      onLongPress();
+    }
+  }
+
   const stateStyle = STATE_STYLES[readState];
   const readLabel =
     readState === 'read'
@@ -112,6 +120,7 @@ export function ChapterTile({
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerCancel}
       onPointerCancel={handlePointerCancel}
+      onKeyDown={handleKeyDown}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{

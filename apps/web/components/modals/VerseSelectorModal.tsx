@@ -16,6 +16,7 @@ import {
   useRef,
   type CSSProperties,
   type ChangeEvent,
+  type KeyboardEvent,
 } from 'react';
 import { Button } from '../ui/Button';
 
@@ -42,6 +43,17 @@ export function VerseSelectorModal({
   const [endVerse, setEndVerse] = useState(totalVerses);
   const [visible, setVisible] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Escape key to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
 
   // Reset range when modal opens for a new chapter
   useEffect(() => {
@@ -49,10 +61,33 @@ export function VerseSelectorModal({
       setStartVerse(1);
       setEndVerse(totalVerses);
       setVisible(true);
+      // Focus the sheet on next tick so screen readers announce the dialog
+      setTimeout(() => sheetRef.current?.focus(), 50);
     } else {
       setVisible(false);
     }
   }, [isOpen, totalVerses]);
+
+  function handleSheetKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== 'Tab') return;
+    const focusable = sheetRef.current?.querySelectorAll<HTMLElement>(
+      'button, input, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
 
   function handleStartChange(e: ChangeEvent<HTMLInputElement>) {
     const val = Number(e.target.value);
@@ -132,31 +167,7 @@ export function VerseSelectorModal({
 
   return (
     <>
-      {/* Inject range input styles once */}
-      <style>{`
-        .verse-range-input::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 22px;
-          height: 22px;
-          border-radius: 50%;
-          background: var(--color-primary);
-          cursor: pointer;
-          pointer-events: all;
-          border: 2px solid white;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-        }
-        .verse-range-input::-moz-range-thumb {
-          width: 22px;
-          height: 22px;
-          border-radius: 50%;
-          background: var(--color-primary);
-          cursor: pointer;
-          pointer-events: all;
-          border: 2px solid white;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-        }
-      `}</style>
+      {/* Range input styles live in globals.css */}
 
       <div
         ref={overlayRef}
@@ -166,7 +177,12 @@ export function VerseSelectorModal({
         aria-modal="true"
         aria-label={`select verses in ${chapterName}`}
       >
-        <div style={sheetStyle}>
+        <div
+          ref={sheetRef}
+          style={sheetStyle}
+          tabIndex={-1}
+          onKeyDown={handleSheetKeyDown}
+        >
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3

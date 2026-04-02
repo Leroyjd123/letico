@@ -34,10 +34,10 @@
 | Field | Value |
 | --- | --- |
 | **Active Phase** | Phase 7 — Polish & Hardening |
-| **Last Completed Phase** | Phase 6 — Analytics |
+| **Last Completed Phase** | Phase 7 — Polish & Hardening |
 | **Last Updated By** | Claude Sonnet 4.6 |
-| **Last Updated On** | 2026-04-01 |
-| **Next Step** | Implement Phase 7: Storybook stories, accessibility audit, settings plan/theme/reset/export, E2E tests, Lighthouse |
+| **Last Updated On** | 2026-04-02 |
+| **Next Step** | All phases complete — deploy or begin Phase 8 if planned |
 
 ---
 
@@ -183,11 +183,34 @@
 
 ---
 
-## Phase 7 — Polish & Hardening _(not started)_
+## Phase 7 — Polish & Hardening
 
 **Goal:** Accessible, documented, production-ready.
 
-Tasks: See `02_PHASE_BREAKDOWN.md` § Phase 7.
+| Status | Task | Agent | Date |
+| --- | --- | --- | --- |
+| [x] | Dark/sepia theme tokens in `globals.css` + `useTheme` hook (reads localStorage, sets `data-theme`) | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Anti-flicker inline `<script>` in `<head>` to apply theme before first paint | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `UsersModule`: `PATCH /users/me` — partial update of `plan_id` / `plan_start_date` | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `GET /plan/list` — public endpoint returning all plans with totalDays | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `POST /progress/reset` — archive-then-delete, non-atomic abort-on-failure | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `GET /progress/export` — full verse_reads dump as JSON | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Shared types: `PlanListItem`, `UpdateUserResult`, `ResetProgressResult`, `ExportProgressResult`, `MeResult` | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Frontend API wrappers: `listPlans`, `updateUser`, `resetProgress`, `exportProgress`, `getMe` | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Full settings page: account (sign in/out), reading (plan selector + start date), appearance (theme toggle), data (reset + export) | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `NetworkBanner` component — fixed-position online/offline banner | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `EmptyState` component — presentational with title, description, action slot | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `RetryButton` component — wraps button with retrying state | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `VerseSelectorModal` a11y: Escape key, focus trap, `sheetRef` + `tabIndex` | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | `ChapterTile` a11y: `Alt+Enter` keyboard trigger for long-press | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Storybook 8 config (`@storybook/nextjs`) + 14 component stories | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Playwright config + 6 E2E journey specs (guest, verse selector, day complete, offline, OTP, read-ahead) | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Unit tests: `UsersService.updateUser` — 6 tests | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Unit tests: `ProgressService.resetProgress` — 4 tests | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Unit tests: `ProgressService.exportProgress` — 3 tests | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Unit tests: `PlanService.listPlans` — 6 tests | Claude Sonnet 4.6 | 2026-04-02 |
+
+**75 API tests passing total.**
 
 ---
 
@@ -399,3 +422,4 @@ _Add new agents here when they first contribute to the project._
 | 1.3 | 2026-03-30 | Claude Sonnet 4.6 | Phase 4 complete — guest auto-provisioning, offline queue, nudge, 27 tests passing |
 | 1.4 | 2026-03-30 | Claude Sonnet 4.6 | Phase 5 complete — OTP sign-in, guest migration, Realtime, BottomNav, 37 tests passing |
 | 1.5 | 2026-04-01 | Claude Sonnet 4.6 | Phase 6 complete — analytics screen, streak, ahead/behind, ProgressGraph, BottomNav analytics tab, 56 tests passing |
+| 1.6 | 2026-04-02 | Claude Sonnet 4.6 | Phase 7 complete — theme system, settings page, error state components, a11y fixes, Storybook 8, Playwright E2E, 75 API tests passing |

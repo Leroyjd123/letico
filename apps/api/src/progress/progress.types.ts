@@ -38,3 +38,18 @@ export interface DailyCountDto {
   date: string;
   count: number;
 }
+
+export interface ResetProgressResponseDto {
+  archivedCount: number;
+}
+
+export interface ExportVerseReadDto {
+  verseId: number;
+  readAt: string;
+}
+
+export interface ExportProgressResponseDto {
+  userId: string;
+  exportedAt: string;
+  verseReads: ExportVerseReadDto[];
+}

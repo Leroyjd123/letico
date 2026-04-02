@@ -22,6 +22,11 @@ import type {
   OtpVerifyResult,
   MigrateGuestResult,
   DailyCount,
+  PlanListItem,
+  UpdateUserResult,
+  ResetProgressResult,
+  ExportProgressResult,
+  MeResult,
 } from '@lectio/types';
 
 // ── Error type ───────────────────────────────────────────────────────────────
@@ -141,6 +146,11 @@ export async function getPlanDays(
   return res;
 }
 
+export async function listPlans(): Promise<PlanListItem[]> {
+  const res = await request<{ data: PlanListItem[] }>('/plan/list');
+  return res.data;
+}
+
 // ── Progress endpoints (auth required) ───────────────────────────────────────
 
 export async function markVersesRead(
@@ -172,6 +182,19 @@ export async function getProgressSummary(auth: AuthContext): Promise<ProgressSum
 
 export async function getDailyCounts(days: number, auth: AuthContext): Promise<DailyCount[]> {
   const res = await request<{ data: DailyCount[] }>(`/progress/daily-counts?days=${days}`, { auth });
+  return res.data;
+}
+
+export async function resetProgress(auth: AuthContext): Promise<ResetProgressResult> {
+  const res = await request<{ data: ResetProgressResult }>('/progress/reset', {
+    method: 'POST',
+    auth,
+  });
+  return res.data;
+}
+
+export async function exportProgress(auth: AuthContext): Promise<ExportProgressResult> {
+  const res = await request<{ data: ExportProgressResult }>('/progress/export', { auth });
   return res.data;
 }
 
@@ -207,6 +230,23 @@ export async function migrateGuest(
   const res = await request<{ data: MigrateGuestResult }>('/auth/migrate', {
     method: 'POST',
     body: JSON.stringify({ guestToken }),
+    auth,
+  });
+  return res.data;
+}
+
+export async function getMe(auth: AuthContext): Promise<MeResult> {
+  const res = await request<{ data: MeResult }>('/auth/me', { auth });
+  return res.data;
+}
+
+export async function updateUser(
+  dto: { planId?: string; planStartDate?: string },
+  auth: AuthContext,
+): Promise<UpdateUserResult> {
+  const res = await request<{ data: UpdateUserResult }>('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(dto),
     auth,
   });
   return res.data;

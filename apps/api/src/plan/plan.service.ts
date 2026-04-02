@@ -8,7 +8,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
-import type { PlanDayRow, UserPlanRow, VerseContext, PlanDayViewDto, PlanDaySummaryDto } from './plan.types';
+import type { PlanDayRow, UserPlanRow, VerseContext, PlanDayViewDto, PlanDaySummaryDto, PlanListItemDto } from './plan.types';
 
 @Injectable()
 export class PlanService {
@@ -100,6 +100,44 @@ export class PlanService {
     }
 
     return results;
+  }
+
+  /**
+   * Returns all plans with their total day count.
+   * Fetches all plans, then resolves each plan's max day_number concurrently.
+   */
+  async listPlans(): Promise<PlanListItemDto[]> {
+    const db = this.supabase.getClient();
+
+    const { data: plansData, error } = await db
+      .from('plans')
+      .select('id, name');
+
+    if (error || !plansData) {
+      return [];
+    }
+
+    const plans = plansData as Array<{ id: string; name: string }>;
+
+    const items = await Promise.all(
+      plans.map(async (plan) => {
+        const { data: dayData } = await db
+          .from('plan_days')
+          .select('day_number')
+          .eq('plan_id', plan.id)
+          .order('day_number', { ascending: false })
+          .limit(1)
+          .single();
+
+        const totalDays = dayData
+          ? (dayData as { day_number: number }).day_number
+          : 0;
+
+        return { id: plan.id, name: plan.name, totalDays };
+      }),
+    );
+
+    return items;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

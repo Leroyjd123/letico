@@ -555,4 +555,178 @@ describe('ProgressService', () => {
       expect(result.every((d) => d.count === 0)).toBe(true);
     });
   });
+
+  describe('resetProgress', () => {
+    /**
+     * resetProgress call order:
+     *   1. verse_reads SELECT  → { data: rows }          (ends at .eq())
+     *   2. archived_verse_reads INSERT → { error }       (ends at .insert())
+     *   3. verse_reads DELETE  → { error }               (ends at .eq())
+     */
+    function buildResetMockClient({
+      rows,
+      archiveError = null,
+      deleteError = null,
+    }: {
+      rows: Array<{ verse_id: number; read_at: string }>;
+      archiveError?: unknown;
+      deleteError?: unknown;
+    }) {
+      let verseReadsCallCount = 0;
+
+      return {
+        from: jest.fn().mockImplementation((table: string) => {
+          if (table === 'verse_reads') {
+            verseReadsCallCount++;
+            if (verseReadsCallCount === 1) {
+              // SELECT
+              return {
+                select: jest.fn().mockReturnThis(),
+                eq: jest.fn().mockResolvedValue({ data: rows, error: null }),
+              };
+            }
+            // DELETE
+            return {
+              delete: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockResolvedValue({ error: deleteError }),
+            };
+          }
+          if (table === 'archived_verse_reads') {
+            return {
+              insert: jest.fn().mockResolvedValue({ error: archiveError }),
+            };
+          }
+          return {};
+        }),
+      };
+    }
+
+    it('returns archivedCount = 0 when no reads exist', async () => {
+      const mockClient = buildResetMockClient({ rows: [] });
+      await createService(mockClient);
+
+      const result = await service.resetProgress(USER_ID);
+      expect(result.archivedCount).toBe(0);
+    });
+
+    it('returns archivedCount = N when N reads are archived', async () => {
+      const rows = [
+        { verse_id: 1, read_at: '2026-04-01T10:00:00.000Z' },
+        { verse_id: 2, read_at: '2026-04-01T10:01:00.000Z' },
+        { verse_id: 3, read_at: '2026-04-01T10:02:00.000Z' },
+      ];
+      const mockClient = buildResetMockClient({ rows });
+      await createService(mockClient);
+
+      const result = await service.resetProgress(USER_ID);
+      expect(result.archivedCount).toBe(3);
+    });
+
+    it('inserts correct payload into archived_verse_reads', async () => {
+      const rows = [{ verse_id: 42, read_at: '2026-04-01T10:00:00.000Z' }];
+      const archiveInsert = jest.fn().mockResolvedValue({ error: null });
+
+      const mockClient = {
+        from: jest.fn().mockImplementation((table: string) => {
+          if (table === 'verse_reads') {
+            const callCount = (mockClient.from.mock.calls as unknown[][]).filter(
+              (c) => c[0] === 'verse_reads',
+            ).length;
+            if (callCount === 1) {
+              return {
+                select: jest.fn().mockReturnThis(),
+                eq: jest.fn().mockResolvedValue({ data: rows, error: null }),
+              };
+            }
+            return {
+              delete: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockResolvedValue({ error: null }),
+            };
+          }
+          if (table === 'archived_verse_reads') {
+            return { insert: archiveInsert };
+          }
+          return {};
+        }),
+      };
+      await createService(mockClient);
+
+      await service.resetProgress(USER_ID);
+
+      expect(archiveInsert).toHaveBeenCalledWith([
+        { user_id: USER_ID, verse_id: 42, read_at: '2026-04-01T10:00:00.000Z' },
+      ]);
+    });
+
+    it('does NOT call delete when archive insert fails', async () => {
+      const rows = [{ verse_id: 1, read_at: '2026-04-01T10:00:00.000Z' }];
+      const mockClient = buildResetMockClient({
+        rows,
+        archiveError: { message: 'archive failed' },
+      });
+      await createService(mockClient);
+
+      await expect(service.resetProgress(USER_ID)).rejects.toThrow('Failed to archive');
+
+      // delete should never have been called
+      const deleteCalls = (mockClient.from.mock.calls as unknown[][]).filter(
+        (c) => c[0] === 'verse_reads',
+      );
+      // Only 1 call to verse_reads (the SELECT) — the DELETE call would be the 2nd
+      expect(deleteCalls).toHaveLength(1);
+    });
+  });
+
+  describe('exportProgress', () => {
+    function buildExportMockClient(rows: Array<{ verse_id: number; read_at: string }>) {
+      return {
+        from: jest.fn().mockImplementation((table: string) => {
+          if (table === 'verse_reads') {
+            return {
+              select: jest.fn().mockReturnThis(),
+              eq: jest.fn().mockReturnThis(),
+              order: jest.fn().mockResolvedValue({ data: rows, error: null }),
+            };
+          }
+          return {};
+        }),
+      };
+    }
+
+    it('returns empty verseReads when no reads exist', async () => {
+      const mockClient = buildExportMockClient([]);
+      await createService(mockClient);
+
+      const result = await service.exportProgress(USER_ID);
+      expect(result.verseReads).toHaveLength(0);
+    });
+
+    it('maps verse_id → verseId and read_at → readAt correctly', async () => {
+      const mockClient = buildExportMockClient([
+        { verse_id: 100, read_at: '2026-04-01T08:00:00.000Z' },
+        { verse_id: 200, read_at: '2026-04-01T09:00:00.000Z' },
+      ]);
+      await createService(mockClient);
+
+      const result = await service.exportProgress(USER_ID);
+      expect(result.verseReads).toEqual([
+        { verseId: 100, readAt: '2026-04-01T08:00:00.000Z' },
+        { verseId: 200, readAt: '2026-04-01T09:00:00.000Z' },
+      ]);
+    });
+
+    it('includes userId and a valid ISO exportedAt timestamp', async () => {
+      const mockClient = buildExportMockClient([]);
+      await createService(mockClient);
+
+      const before = Date.now();
+      const result = await service.exportProgress(USER_ID);
+      const after = Date.now();
+
+      expect(result.userId).toBe(USER_ID);
+      const exportedAtMs = new Date(result.exportedAt).getTime();
+      expect(exportedAtMs).toBeGreaterThanOrEqual(before);
+      expect(exportedAtMs).toBeLessThanOrEqual(after);
+    });
+  });
 });

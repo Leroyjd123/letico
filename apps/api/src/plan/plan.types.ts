@@ -54,3 +54,9 @@ export interface PlanDaySummaryRow {
   /** resolved by parallel verse context queries */
   label?: string;
 }
+
+export interface PlanListItemDto {
+  id: string;
+  name: string;
+  totalDays: number;
+}
