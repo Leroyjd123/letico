@@ -75,7 +75,7 @@ export class PlanService {
 
     const ctxMap = new Map<number, VerseContext>();
     if (versesRaw) {
-      for (const raw of versesRaw as RawVerse[]) {
+      for (const raw of versesRaw as unknown as RawVerse[]) {
         const chapter = Array.isArray(raw.chapters) ? raw.chapters[0] : raw.chapters;
         const book = Array.isArray(chapter?.books) ? chapter.books[0] : chapter?.books;
         if (chapter && book) {
