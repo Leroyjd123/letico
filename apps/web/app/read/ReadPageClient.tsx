@@ -162,7 +162,9 @@ export function ReadPageClient() {
   }, [planDay, allChapters, readVerseIdSet]);
 
   // ── Completion % ─────────────────────────────────────────────────────────
-  const totalVersesInRange = planDay ? planDay.endVerse - planDay.startVerse + 1 : 1;
+  // Use verse IDs (not verse numbers) — verse numbers reset per chapter so
+  // endVerse - startVerse is wrong for multi-chapter days.
+  const totalVersesInRange = planDay ? planDay.endVerseId - planDay.startVerseId + 1 : 1;
   const completionPct = planDay
     ? Math.min(100, Math.round((readVerseIdSet.size / Math.max(totalVersesInRange, 1)) * 100))
     : 0;
@@ -205,11 +207,9 @@ export function ReadPageClient() {
       const chaptersInRange = allChapters.filter(
         (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 8,
       );
-      const allIds: number[] = [];
-      for (const ch of chaptersInRange) {
-        const vv = await fetchVerseIds(ch.id);
-        allIds.push(...vv.map((v) => v.id));
-      }
+      // Fetch all chapter verse IDs in parallel instead of sequentially
+      const versesPerChapter = await Promise.all(chaptersInRange.map((ch) => fetchVerseIds(ch.id)));
+      const allIds = versesPerChapter.flat().map((v) => v.id);
       markDayComplete(allIds);
     })();
   }

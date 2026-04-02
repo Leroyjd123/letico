@@ -124,10 +124,12 @@ export function VerseSelectorModal({
     zIndex: 50,
     display: 'flex',
     alignItems: 'flex-end',
+    justifyContent: 'center',
   };
 
   const sheetStyle: CSSProperties = {
     width: '100%',
+    maxWidth: '36rem',
     backgroundColor: 'var(--color-bg-elevated)',
     borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
     padding: 'var(--space-6)',

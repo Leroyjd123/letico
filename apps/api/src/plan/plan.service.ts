@@ -59,18 +59,46 @@ export class PlanService {
 
     const todayDayNumber = this.computeTodayDayNumber(planStartDate);
 
-    // Batch: call count_verses_read_in_range for all days in parallel (up to 20 concurrent)
-    const CONCURRENCY = 20;
+    // ── Batch-fetch all start-verse contexts in ONE query ─────────────────────
+    // Replaces 365 individual resolveVerseContext calls with a single .in() query.
+    const startVerseIds = days.map((d) => d.start_verse_id);
+    const { data: versesRaw } = await db
+      .from('verses')
+      .select('id, number, chapters(number, books(name, usfm_code))')
+      .in('id', startVerseIds);
+
+    type RawVerse = {
+      id: number;
+      number: number;
+      chapters: { number: number; books: { name: string; usfm_code: string } } | Array<{ number: number; books: { name: string; usfm_code: string } }>;
+    };
+
+    const ctxMap = new Map<number, VerseContext>();
+    if (versesRaw) {
+      for (const raw of versesRaw as RawVerse[]) {
+        const chapter = Array.isArray(raw.chapters) ? raw.chapters[0] : raw.chapters;
+        const book = Array.isArray(chapter?.books) ? chapter.books[0] : chapter?.books;
+        if (chapter && book) {
+          ctxMap.set(raw.id, {
+            verseNumber: raw.number,
+            chapterNumber: chapter.number,
+            bookName: book.name,
+            bookUsfm: book.usfm_code,
+          });
+        }
+      }
+    }
+
+    // ── Batch RPC calls for completion % (up to 40 concurrent) ───────────────
+    const CONCURRENCY = 40;
     const results: PlanDaySummaryDto[] = new Array(days.length);
 
     for (let i = 0; i < days.length; i += CONCURRENCY) {
       const batch = days.slice(i, i + CONCURRENCY);
       await Promise.all(
-        batch.map(async (day, batchIdx) => {
+        batch.map(async (dayRow, batchIdx) => {
           const idx = i + batchIdx;
-          const dayRow = day;
 
-          // Call the count_verses_read_in_range RPC function
           const { data: countData } = await db.rpc('count_verses_read_in_range', {
             p_user_id: userId,
             p_start_global_order: dayRow.start_global_order,
@@ -84,9 +112,10 @@ export class PlanService {
               ? Math.min(100, Math.round((versesRead / totalVerses) * 10000) / 100)
               : 0;
 
-          // Resolve label from start verse
-          const startCtx = await this.resolveVerseContext(dayRow.start_verse_id);
-          const label = `${startCtx.bookName.toLowerCase()} ${startCtx.chapterNumber}`;
+          const startCtx = ctxMap.get(dayRow.start_verse_id);
+          const label = startCtx
+            ? `${startCtx.bookName.toLowerCase()} ${startCtx.chapterNumber}`
+            : `day ${dayRow.day_number}`;
 
           results[idx] = {
             dayNumber: dayRow.day_number,
