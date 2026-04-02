@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;family=Manrope:wght@500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "outline": "#737872",
+              "tertiary-fixed-dim": "#b5c9d7",
+              "on-secondary-fixed": "#1f1b14",
+              "on-tertiary-fixed": "#091e28",
+              "surface-dim": "#dbdad7",
+              "on-surface": "#1b1c1a",
+              "inverse-surface": "#2f312f",
+              "inverse-primary": "#b6ccb6",
+              "on-secondary-container": "#686259",
+              "on-primary-container": "#f7fff3",
+              "on-primary-fixed": "#0d1f11",
+              "on-tertiary-fixed-variant": "#364954",
+              "on-surface-variant": "#434842",
+              "surface-container-high": "#e9e8e5",
+              "primary-container": "#657a67",
+              "surface": "#faf9f6",
+              "surface-container-low": "#f4f3f0",
+              "secondary-container": "#e8ded3",
+              "surface-container-lowest": "#ffffff",
+              "outline-variant": "#c3c8c0",
+              "background": "#faf9f6",
+              "tertiary-fixed": "#d1e5f3",
+              "on-secondary": "#ffffff",
+              "on-primary-fixed-variant": "#384b3a",
+              "on-error-container": "#93000a",
+              "inverse-on-surface": "#f2f1ee",
+              "surface-bright": "#faf9f6",
+              "primary-fixed": "#d2e8d1",
+              "surface-tint": "#4f6351",
+              "error": "#ba1a1a",
+              "secondary-fixed": "#eae1d6",
+              "tertiary": "#4b5f6a",
+              "secondary": "#645d55",
+              "tertiary-container": "#647783",
+              "primary-fixed-dim": "#b6ccb6",
+              "on-error": "#ffffff",
+              "secondary-fixed-dim": "#cec5ba",
+              "surface-container-highest": "#e3e2df",
+              "primary": "#4d614f",
+              "surface-container": "#efeeeb",
+              "on-primary": "#ffffff",
+              "on-tertiary": "#ffffff",
+              "on-tertiary-container": "#fbfcff",
+              "error-container": "#ffdad6",
+              "on-secondary-fixed-variant": "#4b463e",
+              "on-background": "#1b1c1a",
+              "surface-variant": "#e3e2df"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+            font-size: 22px;
+        }
+        body {
+            background-color: #faf9f6;
+            color: #1b1c1a;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .text-deep-grey { color: #2F2F2F; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex items-center justify-between px-8 h-16 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#4d614f] dark:text-[#7A8F7B]" data-icon="menu_book">menu_book</span>
+<h1 class="font-manrope lowercase text-xl text-[#4d614f] dark:text-[#7A8F7B]">lectio</h1>
+</div>
+<div class="flex items-center space-x-6 hidden md:flex">
+<a class="font-manrope lowercase text-2xl tracking-tight text-stone-400 dark:text-stone-500 hover:opacity-80 transition-opacity" href="#">reading</a>
+<a class="font-manrope lowercase text-2xl tracking-tight text-stone-400 dark:text-stone-500 hover:opacity-80 transition-opacity" href="#">analytics</a>
+<a class="font-manrope lowercase text-2xl tracking-tight text-[#4d614f] dark:text-[#7A8F7B] hover:opacity-80 transition-opacity" href="#">settings</a>
+</div>
+<div class="md:hidden">
+<!-- Mobile trailing spacer or action -->
+</div>
+</header>
+<main class="pt-24 pb-32 px-8 max-w-2xl mx-auto min-h-screen">
+<!-- Header Section -->
+<section class="mb-12">
+<h2 class="font-headline text-4xl font-medium lowercase tracking-tight mb-2 text-deep-grey">settings</h2>
+<p class="text-on-surface-variant font-body text-sm lowercase">configure your quiet reading experience</p>
+</section>
+<!-- Profile / Account Summary Card -->
+<div class="mb-10 p-8 rounded-xl bg-surface-container-low flex items-center gap-6">
+<div class="w-16 h-16 rounded-full bg-secondary-container flex items-center justify-center overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="close-up portrait of a woman with soft lighting, neutral background, cinematic and editorial photography style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuARiTtFkGRG18u87aAkkeCDNIexxJLkzvgqkFF2PbL9SpjIUpBfCHrCOLk10g4YBDxX4WM3g_iHzwhN_B2IC6bLxVi8CCDPT0H4kr9_0gxV0Oj145lc9NkppZN0nMJf26X08MxqMedkcgB9-Zn6hI-hzKFEafXHqLuEfumHl8o0sMuOh3otMSRMBtLqYbsKpvLaFRe5iU2c7g0ciLSKNhc6io8L18W_KF1Ko7g_QSkNt9H7Ekj6fKkKde-4kVpc30K-X6ahaNAMh6s"/>
+</div>
+<div>
+<p class="font-headline text-lg text-deep-grey lowercase font-medium">elara vance</p>
+<p class="text-on-surface-variant text-xs lowercase">reader since 2023</p>
+</div>
+</div>
+<!-- Settings List -->
+<div class="space-y-1">
+<!-- Item 1: Current Plan -->
+<div class="group py-6 flex items-center justify-between border-b border-outline-variant/15 hover:bg-surface-container-lowest transition-colors px-4 -mx-4 rounded-xl">
+<div class="flex flex-col">
+<span class="text-on-surface-variant text-[10px] uppercase tracking-widest mb-1">subscription</span>
+<span class="font-body text-lg text-deep-grey lowercase">current plan</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-primary font-medium lowercase text-sm">premium (annual)</span>
+<span class="material-symbols-outlined text-stone-300" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+<!-- Item 2: Change Plan -->
+<div class="group py-6 flex items-center justify-between border-b border-outline-variant/15 hover:bg-surface-container-lowest transition-colors px-4 -mx-4 rounded-xl">
+<div class="flex flex-col">
+<span class="font-body text-lg text-deep-grey lowercase">change plan</span>
+</div>
+<span class="material-symbols-outlined text-stone-300" data-icon="open_in_new">open_in_new</span>
+</div>
+<!-- Item 3: Reset Progress -->
+<div class="group py-6 flex items-center justify-between border-b border-outline-variant/15 hover:bg-surface-container-lowest transition-colors px-4 -mx-4 rounded-xl">
+<div class="flex flex-col">
+<span class="font-body text-lg text-deep-grey lowercase">reset progress</span>
+<span class="text-on-surface-variant text-xs lowercase">this will archive current sessions</span>
+</div>
+<button class="px-4 py-1.5 rounded-full border border-outline-variant text-stone-500 text-xs lowercase hover:bg-error-container hover:text-on-error-container hover:border-transparent transition-all">
+                    reset
+                </button>
+</div>
+<!-- Item 4: Export Data -->
+<div class="group py-6 flex items-center justify-between border-b border-outline-variant/15 hover:bg-surface-container-lowest transition-colors px-4 -mx-4 rounded-xl">
+<div class="flex flex-col">
+<span class="font-body text-lg text-deep-grey lowercase">export data</span>
+</div>
+<div class="flex items-center gap-2 text-stone-400">
+<span class="text-xs lowercase">csv, json</span>
+<span class="material-symbols-outlined" data-icon="download">download</span>
+</div>
+</div>
+<!-- Item 5: Theme -->
+<div class="group py-6 flex items-center justify-between hover:bg-surface-container-lowest transition-colors px-4 -mx-4 rounded-xl">
+<div class="flex flex-col">
+<span class="font-body text-lg text-deep-grey lowercase">theme</span>
+</div>
+<div class="flex p-1 bg-surface-container-high rounded-full gap-1">
+<button class="px-4 py-1 rounded-full bg-surface-container-lowest text-primary text-xs font-medium lowercase shadow-sm transition-all">light</button>
+<button class="px-4 py-1 rounded-full text-stone-500 text-xs lowercase hover:bg-surface-container-highest transition-all">dark</button>
+<button class="px-4 py-1 rounded-full text-stone-500 text-xs lowercase hover:bg-surface-container-highest transition-all">sepia</button>
+</div>
+</div>
+</div>
+<!-- Logout Section -->
+<div class="mt-16 flex justify-center">
+<button class="text-on-surface-variant hover:text-error lowercase text-sm font-light tracking-wide transition-colors">
+                sign out of elara@lectio.app
+            </button>
+</div>
+<!-- Footer / Version info -->
+<div class="mt-24 text-center opacity-30">
+<p class="font-headline text-xs lowercase">lectio version 2.4.0</p>
+<p class="font-body text-[10px] mt-1">made for the slow reader</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-2 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85 shadow-[0_-4px_32px_rgba(27,28,26,0.04)] md:hidden">
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all tap-highlight-none" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_stories">auto_stories</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">reading</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all tap-highlight-none" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="insert_chart_outlined">insert_chart_outlined</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">analytics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#4d614f] dark:text-[#7A8F7B] scale-110 transition-transform tap-highlight-none" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="settings" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">settings</span>
+</a>
+</nav>
+</body></html>

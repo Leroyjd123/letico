@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>lectio — choose your path</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "outline": "#737872",
+              "tertiary-fixed-dim": "#b5c9d7",
+              "on-secondary-fixed": "#1f1b14",
+              "on-tertiary-fixed": "#091e28",
+              "surface-dim": "#dbdad7",
+              "on-surface": "#1b1c1a",
+              "inverse-surface": "#2f312f",
+              "inverse-primary": "#b6ccb6",
+              "on-secondary-container": "#686259",
+              "on-primary-container": "#f7fff3",
+              "on-primary-fixed": "#0d1f11",
+              "on-tertiary-fixed-variant": "#364954",
+              "on-surface-variant": "#434842",
+              "surface-container-high": "#e9e8e5",
+              "primary-container": "#657a67",
+              "surface": "#faf9f6",
+              "surface-container-low": "#f4f3f0",
+              "secondary-container": "#e8ded3",
+              "surface-container-lowest": "#ffffff",
+              "outline-variant": "#c3c8c0",
+              "background": "#faf9f6",
+              "tertiary-fixed": "#d1e5f3",
+              "on-secondary": "#ffffff",
+              "on-primary-fixed-variant": "#384b3a",
+              "on-error-container": "#93000a",
+              "inverse-on-surface": "#f2f1ee",
+              "surface-bright": "#faf9f6",
+              "primary-fixed": "#d2e8d1",
+              "surface-tint": "#4f6351",
+              "error": "#ba1a1a",
+              "secondary-fixed": "#eae1d6",
+              "tertiary": "#4b5f6a",
+              "secondary": "#645d55",
+              "tertiary-container": "#647783",
+              "primary-fixed-dim": "#b6ccb6",
+              "on-error": "#ffffff",
+              "secondary-fixed-dim": "#cec5ba",
+              "surface-container-highest": "#e3e2df",
+              "primary": "#4d614f",
+              "surface-container": "#efeeeb",
+              "on-primary": "#ffffff",
+              "on-tertiary": "#ffffff",
+              "on-tertiary-container": "#fbfcff",
+              "error-container": "#ffdad6",
+              "on-secondary-fixed-variant": "#4b463e",
+              "on-background": "#1b1c1a",
+              "surface-variant": "#e3e2df"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .bento-stagger {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex items-center justify-between px-8 h-16 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#4d614f] dark:text-[#7A8F7B]" data-icon="menu_book">menu_book</span>
+<span class="font-manrope lowercase text-xl text-[#4d614f] dark:text-[#7A8F7B] tracking-tight">lectio</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="font-inter lowercase text-[14px] text-[#4d614f] dark:text-[#7A8F7B] hover:opacity-80 transition-opacity" href="#">reading</a>
+<a class="font-inter lowercase text-[14px] text-stone-400 dark:text-stone-500 hover:opacity-80 transition-opacity" href="#">analytics</a>
+<a class="font-inter lowercase text-[14px] text-stone-400 dark:text-stone-500 hover:opacity-80 transition-opacity" href="#">settings</a>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#4d614f] opacity-40" data-icon="search">search</span>
+</div>
+</header>
+<main class="min-h-screen pt-32 pb-32 px-6 flex flex-col items-center max-w-2xl mx-auto">
+<!-- Hero Section -->
+<section class="text-center mb-16 space-y-3">
+<h1 class="font-headline text-5xl md:text-6xl text-primary lowercase tracking-tighter">lectio</h1>
+<p class="font-body text-on-surface-variant lowercase tracking-wide opacity-70">choose your reading path</p>
+</section>
+<!-- Plan Selection Stack -->
+<div class="w-full space-y-5">
+<!-- Option 1: Selected State -->
+<button class="w-full group relative flex items-center justify-between p-8 bg-primary-container rounded-xl border border-transparent transition-all duration-300 active:scale-[0.98]">
+<div class="flex flex-col items-start text-left">
+<span class="font-headline text-2xl text-on-primary-container lowercase tracking-tight">1 year plan</span>
+<span class="font-body text-sm text-on-primary-container/70 lowercase mt-1">the classic pace. daily entries, mindful reflections.</span>
+</div>
+<div class="bg-on-primary-container/20 p-2 rounded-full">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="check" style="font-variation-settings: 'wght' 500;">check</span>
+</div>
+</button>
+<!-- Option 2 -->
+<button class="w-full group relative flex items-center justify-between p-8 bg-surface-container-low hover:bg-surface-container rounded-xl border border-transparent transition-all duration-300 active:scale-[0.98]">
+<div class="flex flex-col items-start text-left">
+<span class="font-headline text-2xl text-on-surface lowercase tracking-tight">2 year plan</span>
+<span class="font-body text-sm text-on-surface-variant lowercase mt-1">deep immersion. twice the time for every chapter.</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors" data-icon="arrow_forward_ios">arrow_forward_ios</span>
+</button>
+<!-- Option 3 -->
+<button class="w-full group relative flex items-center justify-between p-8 bg-surface-container-low hover:bg-surface-container rounded-xl border border-transparent transition-all duration-300 active:scale-[0.98]">
+<div class="flex flex-col items-start text-left">
+<span class="font-headline text-2xl text-on-surface lowercase tracking-tight">chronological</span>
+<span class="font-body text-sm text-on-surface-variant lowercase mt-1">follow the timeline. read as history unfolded.</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition-colors" data-icon="history_edu">history_edu</span>
+</button>
+<!-- Option 4: Subtle/Disabled -->
+<div class="w-full flex items-center justify-between p-8 bg-surface-container-lowest opacity-40 rounded-xl cursor-not-allowed">
+<div class="flex flex-col items-start text-left">
+<div class="flex items-center gap-2">
+<span class="font-headline text-2xl text-on-surface lowercase tracking-tight">custom</span>
+<span class="bg-surface-container-highest px-2 py-0.5 rounded text-[10px] uppercase tracking-widest font-bold">soon</span>
+</div>
+<span class="font-body text-sm text-on-surface-variant lowercase mt-1">design your own cadence. personal goals.</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant" data-icon="lock">lock</span>
+</div>
+</div>
+<!-- Descriptive Visual Element -->
+<div class="mt-16 w-full aspect-[21/9] rounded-xl overflow-hidden relative grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-1000">
+<img class="w-full h-full object-cover" data-alt="soft focus close-up of aged book pages and a sprig of dried lavender on a linen surface with warm morning light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqjgvQDwR8tu7TXZokn5JeZWHB4VJcizajX1cq9hrkSD8660HxMY1z5RiAm5ANKjFNZNOCCVgjZEbAZU-5JWO9f0ANETvni_EajGPCqzvYoSFeljzyCkXaUsc1T9COryXR61ClavpM1dwyzSY-dV3OSUUljT696LN4NWryYcd3mFS56IQCTeq3lu54HRIQzlOor6X8it8MgGMwY5-8OeshppfyqzD0xdauC81_LqUSmLQOz6pMQ5HJVwFPXUdqEWc1sg-wKgnoGes"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent"></div>
+</div>
+<p class="mt-12 text-center font-body text-xs text-on-surface-variant opacity-50 lowercase max-w-xs leading-relaxed">
+            no rush, no notifications. lectio is a space for your thoughts. choose the rhythm that feels right for today.
+        </p>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-2 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85 shadow-[0_-4px_32px_rgba(27,28,26,0.04)] md:hidden">
+<a class="flex flex-col items-center justify-center text-[#4d614f] dark:text-[#7A8F7B] scale-110 transition-transform tap-highlight-none" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_stories" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">reading</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all tap-highlight-none" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="insert_chart_outlined">insert_chart_outlined</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">analytics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all tap-highlight-none" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="settings">settings</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">settings</span>
+</a>
+</nav>
+</body></html>

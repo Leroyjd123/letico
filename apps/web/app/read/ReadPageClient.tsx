@@ -23,6 +23,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { PlanDayView, Chapter } from '@lectio/types';
 import { getPlanToday, getChapters } from '../../lib/api';
+import { logger } from '../../lib/logger';
 import type { AuthContext } from '../../lib/api';
 import { useAuthContext } from '../../components/providers/AuthProvider';
 import { useVerseRead } from '../../hooks/useVerseRead';
@@ -173,7 +174,9 @@ export function ReadPageClient() {
   // ── Handlers ─────────────────────────────────────────────────────────────
   function handleTap(item: ChapterGridItem) {
     void (async () => {
+      logger.action('chapter:tap', { chapterId: item.chapterId, chapterNumber: item.chapterNumber });
       const verses = await fetchVerseIds(item.chapterId);
+      logger.info('chapter:tap:verses-fetched', { count: verses.length });
       markChapter(verses.map((v) => v.id));
       incrementChapterCount();
     })();
@@ -204,12 +207,14 @@ export function ReadPageClient() {
   function handleMarkDayComplete() {
     void (async () => {
       if (!planDay || !allChapters) return;
+      logger.action('day:complete:start', { day: planDay.dayNumber, label: planDay.label });
       const chaptersInRange = allChapters.filter(
         (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 8,
       );
-      // Fetch all chapter verse IDs in parallel instead of sequentially
+      logger.info('day:complete:chapters', { count: chaptersInRange.length });
       const versesPerChapter = await Promise.all(chaptersInRange.map((ch) => fetchVerseIds(ch.id)));
       const allIds = versesPerChapter.flat().map((v) => v.id);
+      logger.info('day:complete:verse-ids', { count: allIds.length });
       markDayComplete(allIds);
     })();
   }

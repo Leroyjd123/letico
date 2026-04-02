@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "outline": "#737872",
+              "tertiary-fixed-dim": "#b5c9d7",
+              "on-secondary-fixed": "#1f1b14",
+              "on-tertiary-fixed": "#091e28",
+              "surface-dim": "#dbdad7",
+              "on-surface": "#1b1c1a",
+              "inverse-surface": "#2f312f",
+              "inverse-primary": "#b6ccb6",
+              "on-secondary-container": "#686259",
+              "on-primary-container": "#f7fff3",
+              "on-primary-fixed": "#0d1f11",
+              "on-tertiary-fixed-variant": "#364954",
+              "on-surface-variant": "#434842",
+              "surface-container-high": "#e9e8e5",
+              "primary-container": "#657a67",
+              "surface": "#faf9f6",
+              "surface-container-low": "#f4f3f0",
+              "secondary-container": "#e8ded3",
+              "surface-container-lowest": "#ffffff",
+              "outline-variant": "#c3c8c0",
+              "background": "#faf9f6",
+              "tertiary-fixed": "#d1e5f3",
+              "on-secondary": "#ffffff",
+              "on-primary-fixed-variant": "#384b3a",
+              "on-error-container": "#93000a",
+              "inverse-on-surface": "#f2f1ee",
+              "surface-bright": "#faf9f6",
+              "primary-fixed": "#d2e8d1",
+              "surface-tint": "#4f6351",
+              "error": "#ba1a1a",
+              "secondary-fixed": "#eae1d6",
+              "tertiary": "#4b5f6a",
+              "secondary": "#645d55",
+              "tertiary-container": "#647783",
+              "primary-fixed-dim": "#b6ccb6",
+              "on-error": "#ffffff",
+              "secondary-fixed-dim": "#cec5ba",
+              "surface-container-highest": "#e3e2df",
+              "primary": "#4d614f",
+              "surface-container": "#efeeeb",
+              "on-primary": "#ffffff",
+              "on-tertiary": "#ffffff",
+              "on-tertiary-container": "#fbfcff",
+              "error-container": "#ffdad6",
+              "on-secondary-fixed-variant": "#4b463e",
+              "on-background": "#1b1c1a",
+              "surface-variant": "#e3e2df"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        -webkit-tap-highlight-color: transparent;
+      }.card-completed .initial-content { display: none; }
+      .card-completed .success-content { display: block; }
+      .success-content { display: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<header class="fixed top-0 w-full z-50 flex items-center justify-between px-8 h-16 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#4d614f] dark:text-[#7A8F7B]" data-icon="menu_book">menu_book</span>
+<h1 class="font-manrope lowercase text-xl text-[#4d614f] dark:text-[#7A8F7B]">lectio</h1>
+</div>
+<div class="hidden md:flex gap-8 items-center">
+<span class="font-manrope lowercase text-[14px] tracking-tight text-[#4d614f] dark:text-[#7A8F7B] hover:opacity-80 transition-opacity cursor-pointer">reading</span>
+<span class="font-manrope lowercase text-[14px] tracking-tight text-stone-400 dark:text-stone-500 hover:opacity-80 transition-opacity cursor-pointer">analytics</span>
+<span class="font-manrope lowercase text-[14px] tracking-tight text-stone-400 dark:text-stone-500 hover:opacity-80 transition-opacity cursor-pointer">settings</span>
+</div>
+<div class="md:hidden">
+<span class="material-symbols-outlined text-[#4d614f] dark:text-[#7A8F7B]" data-icon="more_vert">more_vert</span>
+</div>
+</header>
+<main class="pt-24 pb-48 px-6 max-w-screen-md mx-auto min-h-screen">
+<section class="mb-10">
+<div class="bg-surface-container-low p-8 rounded-2xl border border-outline-variant/10 shadow-[0_4px_24px_rgba(0,0,0,0.02)] transition-all">
+<div class="initial-content">
+<p class="font-label text-sm text-on-surface-variant/70 lowercase mb-2">today — day 42</p>
+<h2 class="font-headline text-3xl font-light tracking-tight lowercase text-on-surface">genesis 12–15</h2>
+<div class="mt-6 flex items-center gap-3">
+<div class="h-1 flex-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-3/4 rounded-full"></div>
+</div>
+<span class="text-[11px] font-label text-on-surface-variant lowercase">75% complete</span>
+</div>
+<button class="w-full mt-8 bg-primary text-on-primary py-4 rounded-xl font-headline font-semibold lowercase tracking-wide shadow-lg shadow-primary/10 active:scale-[0.97] transition-transform">
+            mark day 42 complete
+        </button>
+</div>
+<div class="success-content py-4 text-center">
+<div class="flex justify-center mb-4">
+<span class="material-symbols-outlined text-primary text-4xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<h2 class="font-headline text-2xl font-semibold tracking-tight lowercase text-on-surface mb-6">day 42: genesis 12–15 completed!</h2>
+<div class="flex items-center gap-3">
+<div class="h-2 flex-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-full rounded-full"></div>
+</div>
+<span class="text-[11px] font-label text-primary font-bold lowercase">100%</span>
+</div>
+</div>
+</div>
+</section>
+<section class="space-y-6">
+<div class="flex items-end justify-between px-2">
+<h3 class="font-headline text-lg lowercase opacity-80">current progress</h3>
+<span class="font-label text-[11px] uppercase tracking-[0.1em] text-on-surface-variant">book i</span>
+</div>
+<div class="grid grid-cols-4 md:grid-cols-6 gap-3">
+<div class="aspect-square flex flex-col items-center justify-center bg-primary rounded-xl transition-all duration-300 active:scale-90 cursor-pointer group relative">
+<span class="font-headline text-on-primary text-xl">12</span>
+<span class="material-symbols-outlined text-on-primary text-[14px] absolute top-1.5 right-1.5" data-icon="check" style="font-variation-settings: 'FILL' 1; font-weight: 700;">check</span>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center bg-primary rounded-xl transition-all duration-300 active:scale-90 cursor-pointer relative">
+<span class="font-headline text-on-primary text-xl">13</span>
+<span class="material-symbols-outlined text-on-primary text-[14px] absolute top-1.5 right-1.5" data-icon="check" style="font-variation-settings: 'FILL' 1; font-weight: 700;">check</span>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center bg-surface-container-low rounded-xl border-2 border-primary/30 transition-all duration-300 active:scale-90 cursor-pointer overflow-hidden relative">
+<div class="absolute inset-x-0 bottom-0 bg-primary/20 h-1/2"></div>
+<span class="font-headline text-primary text-xl relative z-10">14</span>
+<span class="material-symbols-outlined text-primary/40 text-[10px] absolute top-1.5 right-1.5" data-icon="radio_button_partial">pending</span>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center bg-surface-container-lowest rounded-xl border-2 border-primary/10 transition-all duration-300 active:scale-95 cursor-pointer hover:border-primary/40 group">
+<span class="font-headline text-on-surface-variant text-xl">15</span>
+<span class="font-label text-[8px] mt-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity">mark read</span>
+</div>
+<div class="col-span-2 aspect-video md:aspect-auto md:h-full bg-secondary-container/30 rounded-xl flex flex-col justify-end p-4 border border-outline-variant/5">
+<p class="font-label text-[10px] text-on-secondary-container/60 lowercase">upcoming reflection</p>
+<p class="font-headline text-sm text-on-secondary-container/80 lowercase">the covenant</p>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center bg-surface-container-lowest rounded-xl border border-outline-variant/30 opacity-40">
+<span class="font-headline text-on-surface-variant/40 text-xl">16</span>
+</div>
+<div class="aspect-square flex flex-col items-center justify-center bg-surface-container-lowest rounded-xl border border-outline-variant/30 opacity-40">
+<span class="font-headline text-on-surface-variant/40 text-xl">17</span>
+</div>
+</div>
+</section>
+<section class="mt-12">
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-surface-container-low p-5 rounded-xl flex flex-col gap-8 h-40">
+<span class="material-symbols-outlined text-primary" data-icon="auto_awesome">auto_awesome</span>
+<div>
+<p class="font-headline text-2xl lowercase leading-tight">meditation</p>
+<p class="font-label text-xs text-on-surface-variant lowercase opacity-70">5 minutes for chapter 15</p>
+</div>
+</div>
+<div class="bg-tertiary-fixed/30 p-5 rounded-xl flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-tertiary" data-icon="history_edu">history_edu</span>
+<span class="text-[10px] font-label text-tertiary uppercase tracking-tighter">note</span>
+</div>
+<p class="font-body text-xs text-on-surface-variant leading-relaxed">abraham believed the lord, and he credited it to him...</p>
+</div>
+</div>
+</section>
+</main>
+<div class="fixed bottom-24 left-1/2 -translate-x-1/2 w-[calc(100%-3rem)] max-w-sm z-40">
+<div class="bg-[#4d614f] text-white py-4 px-6 rounded-full flex items-center justify-between shadow-[0_12px_48px_rgba(77,97,79,0.3)] cursor-pointer hover:scale-[1.02] transition-transform active:scale-95">
+<span class="font-headline text-sm lowercase tracking-wide">continue reading → genesis 15</span>
+<span class="material-symbols-outlined text-[18px]" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-2 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85 shadow-[0_-4px_32px_rgba(27,28,26,0.04)]">
+<div class="flex flex-col items-center justify-center text-[#4d614f] dark:text-[#7A8F7B] transition-transform cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="auto_stories" data-weight="fill" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">reading</span>
+</div>
+<div class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="insert_chart_outlined">insert_chart_outlined</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">analytics</span>
+</div>
+<div class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="settings">settings</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">settings</span>
+</div>
+</nav>
+
+</body></html>

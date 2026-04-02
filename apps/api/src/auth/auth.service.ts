@@ -82,7 +82,8 @@ export class AuthService {
         id: userId,
         guest_token: guestToken,
         plan_id: planId,
-        plan_start_date: new Date().toISOString().slice(0, 10),
+        // plan_start_date intentionally null — user sets it in Settings.
+        // computeTodayDayNumber() returns day 1 when start date is null.
       })
       .select('guest_token, created_at')
       .single();

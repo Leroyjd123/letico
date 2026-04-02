@@ -15,6 +15,7 @@ import { useState, useRef } from 'react';
 import { sendOtp, verifyOtp, migrateGuest } from '../../../lib/api';
 import type { AuthContext } from '../../../lib/api';
 import { getBrowserSupabaseClient } from '../../../lib/supabase';
+import { logger } from '../../../lib/logger';
 
 const GUEST_TOKEN_KEY = 'lectio_guest_token';
 
@@ -34,12 +35,15 @@ export function LoginPageClient() {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
+    logger.action('otp:send', { email });
     try {
       await sendOtp(email.trim());
       setStep('code');
+      logger.action('otp:send:success');
       setTimeout(() => codeRef.current?.focus(), 50);
-    } catch {
-      setError('couldn't send a code to that address — check the email and try again');
+    } catch (err) {
+      logger.error('otp:send:failed', err);
+      setError("couldn't send a code to that address — check the email and try again");
     } finally {
       setIsLoading(false);
     }
@@ -50,6 +54,7 @@ export function LoginPageClient() {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
+    logger.action('otp:verify', { email });
     try {
       const result = await verifyOtp(email.trim(), code.trim());
 
@@ -65,18 +70,20 @@ export function LoginPageClient() {
       if (guestToken) {
         const bearerAuth: AuthContext = { type: 'bearer', token: result.accessToken };
         try {
-          await migrateGuest(guestToken, bearerAuth);
-        } catch {
+          const migrationResult = await migrateGuest(guestToken, bearerAuth);
+          logger.action('guest:migrate:success', migrationResult);
+        } catch (err) {
+          logger.error('guest:migrate:failed', err);
           // Migration failure is non-fatal — reads remain on the guest account
-          // Phase 7 can add a retry UI here
         }
         localStorage.removeItem(GUEST_TOKEN_KEY);
       }
 
-      // Navigate to reading screen — auth state will be picked up by useAuth
+      logger.action('otp:verify:success');
       window.location.href = '/read';
-    } catch {
-      setError('that code didn't work — request a new one');
+    } catch (err) {
+      logger.error('otp:verify:failed', err);
+      setError("that code didn't work — request a new one");
     } finally {
       setIsLoading(false);
     }
@@ -146,8 +153,8 @@ export function LoginPageClient() {
           }}
         >
           {step === 'email'
-            ? 'we'll send a sign-in code to your email'
-            : `we sent a 6-digit code to ${email}`}
+            ? "we'll send a sign-in code to your email"
+            : 'we sent a 6-digit code to ' + email}
         </p>
       </div>
 
@@ -169,7 +176,7 @@ export function LoginPageClient() {
             style={inputStyle}
           />
           <button type="submit" disabled={isLoading || !email.trim()} style={primaryBtnStyle}>
-            {isLoading ? 'sending…' : 'send code'}
+            {isLoading ? 'sending\u2026' : 'send code'}
           </button>
           {error && (
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
@@ -201,7 +208,7 @@ export function LoginPageClient() {
             disabled={isLoading || code.trim().length < 6}
             style={primaryBtnStyle}
           >
-            {isLoading ? 'verifying…' : 'verify'}
+            {isLoading ? 'verifying\u2026' : 'verify'}
           </button>
           {error && (
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
@@ -223,7 +230,7 @@ export function LoginPageClient() {
               textAlign: 'left',
             }}
           >
-            ← use a different email
+            use a different email
           </button>
         </form>
       )}
@@ -239,7 +246,7 @@ export function LoginPageClient() {
           textTransform: 'lowercase',
         }}
       >
-        continue without signing in →
+        continue without signing in
       </a>
     </div>
   );

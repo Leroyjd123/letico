@@ -35,6 +35,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'lectio',
   description: 'a quiet place to track your reading',
+  icons: { icon: '/favicon.svg' },
 };
 
 export default function RootLayout({
