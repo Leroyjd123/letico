@@ -203,7 +203,7 @@ export function ReadPageClient() {
     void (async () => {
       if (!planDay || !allChapters) return;
       const chaptersInRange = allChapters.filter(
-        (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 10,
+        (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 8,
       );
       const allIds: number[] = [];
       for (const ch of chaptersInRange) {

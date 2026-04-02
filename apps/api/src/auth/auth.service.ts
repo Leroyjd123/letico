@@ -22,22 +22,24 @@ export class AuthService {
 
   // ── GET /auth/me ──────────────────────────────────────────────────────────
 
-  /** Returns the authenticated user's profile including their planId. */
-  async getMe(userId: string): Promise<{ id: string; planId: string | null }> {
+  /** Returns the authenticated user's profile including their planId and planStartDate. */
+  async getMe(userId: string): Promise<{ id: string; planId: string | null; planStartDate: string | null }> {
     const db = this.supabase.getClient();
 
     const { data: userRow } = await db
       .from('users')
-      .select('id, plan_id')
+      .select('id, plan_id, plan_start_date')
       .eq('id', userId)
       .is('archived_at', null)
       .single();
 
     if (!userRow) {
-      return { id: userId, planId: null };
+      return { id: userId, planId: null, planStartDate: null };
     }
 
-    let planId = (userRow as { id: string; plan_id: string | null }).plan_id;
+    const row = userRow as { id: string; plan_id: string | null; plan_start_date: string | null };
+    let planId = row.plan_id;
+    const planStartDate = row.plan_start_date;
 
     if (!planId) {
       const { data: defaultPlan } = await db
@@ -49,7 +51,7 @@ export class AuthService {
       planId = defaultPlan ? (defaultPlan as { id: string }).id : null;
     }
 
-    return { id: userId, planId };
+    return { id: userId, planId, planStartDate };
   }
 
   // ── POST /auth/guest ──────────────────────────────────────────────────────

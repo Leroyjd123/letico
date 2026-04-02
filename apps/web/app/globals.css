@@ -124,6 +124,9 @@ body {
   --color-ghost-border: rgba(120, 130, 120, 0.2);
   --color-stat-card-bg: rgba(60, 65, 60, 0.35);
   --color-overlay: rgba(232, 230, 225, 0.25);
+  --color-outline: rgba(232, 230, 225, 0.1);
+  --color-success: #7aab8e;
+  --color-error: #ef9a9a;
 }
 
 /* ─── Sepia theme ───────────────────────────────────────────────────────────── */
@@ -146,4 +149,7 @@ body {
   --color-ghost-border: rgba(150, 140, 120, 0.2);
   --color-stat-card-bg: rgba(220, 215, 200, 0.35);
   --color-overlay: rgba(44, 42, 37, 0.25);
+  --color-outline: rgba(44, 42, 37, 0.1);
+  --color-success: #5a7a3a;
+  --color-error: #9b2335;
 }

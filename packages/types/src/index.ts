@@ -138,6 +138,7 @@ export interface ExportProgressResult {
 export interface MeResult {
   id: string;
   planId: string | null;
+  planStartDate: string | null;
 }
 
 export type { };

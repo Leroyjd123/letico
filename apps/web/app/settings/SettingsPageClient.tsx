@@ -337,6 +337,7 @@ export function SettingsPageClient() {
             id="plan-start-date"
             type="date"
             disabled={!auth}
+            value={me?.planStartDate ?? ''}
             onChange={(e) => {
               if (!auth || !e.target.value) return;
               updateUserMutation.mutate({ planStartDate: e.target.value });
@@ -345,7 +346,7 @@ export function SettingsPageClient() {
               fontFamily: 'var(--font-body)',
               fontSize: '0.875rem',
               color: 'var(--color-text-primary)',
-              background: 'var(--color-surface)',
+              background: 'var(--color-bg-surface)',
               border: '1px solid var(--color-outline)',
               borderRadius: 'var(--radius-md)',
               padding: 'var(--space-2) var(--space-3)',
@@ -416,7 +417,7 @@ export function SettingsPageClient() {
                     style={{
                       ...actionBtnStyle,
                       color: resetConfirm
-                        ? 'var(--color-error, #b00020)'
+                        ? 'var(--color-error)'
                         : 'var(--color-text-muted)',
                       cursor: resetMutation.isPending ? 'wait' : 'pointer',
                       opacity: resetMutation.isPending ? 0.6 : 1,
