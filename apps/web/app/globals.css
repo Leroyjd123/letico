@@ -13,6 +13,17 @@
   padding: 0;
 }
 
+/* Theme-aware utility variables that sit on top of the base design tokens */
+:root {
+  --paper-grain-opacity: 0.02;
+  --glass-nav-bg: rgba(250, 249, 246, 0.88);
+  --modal-overlay-bg: rgba(250, 249, 246, 0.84);
+  --chapter-partial-fill: rgba(77, 97, 79, 0.22);
+  --chapter-unread-border: rgba(77, 97, 79, 0.12);
+  --chapter-hover-overlay: rgba(77, 97, 79, 0.08);
+  --read-hover-overlay: rgba(27, 28, 26, 0.28);
+}
+
 /* Base typography */
 body {
   font-family: var(--font-body);
@@ -20,6 +31,7 @@ body {
   background-color: var(--color-bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  position: relative;
 }
 
 /* Remove default link styling */
@@ -79,33 +91,121 @@ body {
   min-height: 100%;
 }
 
+/* ─── Paper grain texture — fixed overlay, very subtle (<5% opacity) ─────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--paper-grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 300px 300px;
+}
+
 /* ─── Verse range slider thumb ──────────────────────────────────────────────── */
 .verse-range-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--color-primary);
   cursor: pointer;
   pointer-events: all;
   border: 2px solid white;
   box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  transition: transform 0.2s ease;
+}
+
+.verse-range-input:active::-webkit-slider-thumb {
+  transform: scale(1.15);
 }
 
 .verse-range-input::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--color-primary);
   cursor: pointer;
   pointer-events: all;
   border: 2px solid white;
   box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  transition: transform 0.2s ease;
+}
+
+.verse-range-input:active::-moz-range-thumb {
+  transform: scale(1.15);
+}
+
+/* Make the default track invisible — the custom track div handles visuals */
+.verse-range-input::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.verse-range-input::-moz-range-track {
+  background: transparent;
+  height: 0;
+}
+
+/* ─── Glass nav utility ──────────────────────────────────────────────────────── */
+.glass-nav {
+  background: var(--glass-nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.verse-selector-overlay {
+  background: var(--modal-overlay-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.verse-selector-sheet {
+  width: min(42rem, 100%);
+}
+
+.verse-selector-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-4);
+}
+
+.verse-selector-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .verse-selector-sheet {
+    width: 100%;
+    max-height: min(90vh, 44rem);
+  }
+
+  .verse-selector-actions {
+    align-items: stretch;
+  }
+
+  .verse-selector-actions > :first-child {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .verse-selector-actions > :last-child {
+    width: 100%;
+  }
+
+  .verse-selector-actions > :last-child .lectio-btn {
+    flex: 1;
+  }
 }
 
 /* ─── Dark theme ────────────────────────────────────────────────────────────── */
-[data-theme='dark'] {
+html[data-theme='dark'] {
   --color-bg-page: #1b1c1a;
   --color-bg-surface: #2f312f;
   --color-bg-elevated: #3a3d3a;
@@ -127,10 +227,17 @@ body {
   --color-outline: rgba(232, 230, 225, 0.1);
   --color-success: #7aab8e;
   --color-error: #ef9a9a;
+  --paper-grain-opacity: 0.014;
+  --glass-nav-bg: rgba(27, 28, 26, 0.82);
+  --modal-overlay-bg: rgba(27, 28, 26, 0.78);
+  --chapter-partial-fill: rgba(182, 204, 182, 0.2);
+  --chapter-unread-border: rgba(232, 230, 225, 0.12);
+  --chapter-hover-overlay: rgba(232, 230, 225, 0.08);
+  --read-hover-overlay: rgba(232, 230, 225, 0.12);
 }
 
 /* ─── Sepia theme ───────────────────────────────────────────────────────────── */
-[data-theme='sepia'] {
+html[data-theme='sepia'] {
   --color-bg-page: #f5f0e8;
   --color-bg-surface: #ede8dc;
   --color-bg-elevated: #faf7f0;
@@ -152,4 +259,11 @@ body {
   --color-outline: rgba(44, 42, 37, 0.1);
   --color-success: #5a7a3a;
   --color-error: #9b2335;
+  --paper-grain-opacity: 0.024;
+  --glass-nav-bg: rgba(245, 240, 232, 0.86);
+  --modal-overlay-bg: rgba(245, 240, 232, 0.84);
+  --chapter-partial-fill: rgba(92, 107, 58, 0.18);
+  --chapter-unread-border: rgba(92, 107, 58, 0.14);
+  --chapter-hover-overlay: rgba(92, 107, 58, 0.08);
+  --read-hover-overlay: rgba(44, 42, 37, 0.14);
 }

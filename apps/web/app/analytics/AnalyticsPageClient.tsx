@@ -67,7 +67,7 @@ export function AnalyticsPageClient() {
       {/* Sticky page header */}
       <div
         style={{
-          padding: 'var(--space-6) var(--space-6) var(--space-4)',
+          padding: 'var(--space-6) var(--space-6) var(--space-5)',
           position: 'sticky',
           top: 0,
           backgroundColor: 'var(--color-bg-page)',
@@ -78,25 +78,27 @@ export function AnalyticsPageClient() {
         <h1
           style={{
             fontFamily: 'var(--font-headline)',
-            fontSize: '1.25rem',
-            fontWeight: 600,
+            fontSize: '1.75rem',
+            fontWeight: 300,
             color: 'var(--color-text-primary)',
             textTransform: 'lowercase',
             margin: 0,
+            letterSpacing: '-0.01em',
           }}
         >
-          analytics
+          your journey
         </h1>
         <p
           style={{
-            fontFamily: 'var(--font-headline)',
+            fontFamily: 'var(--font-body)',
             fontSize: '0.8125rem',
             color: 'var(--color-text-muted)',
             textTransform: 'lowercase',
-            margin: 'var(--space-1) 0 0',
+            marginTop: 'var(--space-1)',
+            letterSpacing: '0.02em',
           }}
         >
-          your reading at a glance
+          mapping the quiet evolution of your reading
         </p>
       </div>
 
@@ -114,15 +116,15 @@ export function AnalyticsPageClient() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: '1fr 1fr 1fr',
               gap: 'var(--space-3)',
             }}
           >
-            {[0, 1].map((i) => (
+            {[0, 1, 2].map((i) => (
               <div
                 key={i}
                 style={{
-                  height: 96,
+                  height: 112,
                   borderRadius: 'var(--radius-lg)',
                   backgroundColor: 'var(--color-bg-surface)',
                   animation: 'pulse 1.4s ease-in-out infinite',
@@ -142,7 +144,7 @@ export function AnalyticsPageClient() {
           />
           <div
             style={{
-              height: 140,
+              height: 160,
               borderRadius: 'var(--radius-lg)',
               backgroundColor: 'var(--color-bg-surface)',
               animation: 'pulse 1.4s ease-in-out infinite',
@@ -159,19 +161,20 @@ export function AnalyticsPageClient() {
             padding: 'var(--space-6)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 'var(--space-4)',
+            gap: 'var(--space-5)',
           }}
         >
-          {/* Stat cards: completion % and streak */}
+          {/* Stat cards grid: completion %, days of reading, verses read */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: '1fr 1fr 1fr',
               gap: 'var(--space-3)',
             }}
           >
             <StatCard label="completed" value={`${summary.completionPct}%`} />
-            <StatCard label="day streak" value={summary.streakDays} />
+            <StatCard label="days of reading" value={summary.streakDays} />
+            <StatCard label="verses read" value={summary.totalVersesRead} />
           </div>
 
           {/* Ahead / behind sentence — omitted when no plan */}
@@ -183,21 +186,36 @@ export function AnalyticsPageClient() {
               style={{
                 backgroundColor: 'var(--color-stat-card-bg)',
                 borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-4)',
+                padding: 'var(--space-5)',
               }}
             >
-              <p
-                style={{
-                  fontFamily: 'var(--font-headline)',
-                  fontSize: '10px',
-                  letterSpacing: '0.18em',
-                  color: 'var(--color-text-muted)',
-                  textTransform: 'uppercase',
-                  margin: 0,
-                }}
-              >
-                last 7 days
-              </p>
+              <div style={{ marginBottom: 'var(--space-3)' }}>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-headline)',
+                    fontSize: '0.6875rem',
+                    letterSpacing: '0.18em',
+                    color: 'var(--color-text-muted)',
+                    textTransform: 'uppercase',
+                    margin: 0,
+                    fontWeight: 500,
+                  }}
+                >
+                  last 7 days
+                </p>
+                <p
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '0.75rem',
+                    color: 'var(--color-text-muted)',
+                    textTransform: 'lowercase',
+                    marginTop: 'var(--space-1)',
+                    opacity: 0.7,
+                  }}
+                >
+                  a quiet record of your recent reading
+                </p>
+              </div>
               <ProgressGraph data={dailyCounts} />
             </div>
           )}

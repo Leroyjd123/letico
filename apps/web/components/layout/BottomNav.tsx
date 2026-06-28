@@ -5,6 +5,7 @@
  * Three destinations: read · plan · settings
  * Active item is highlighted using CSS custom properties only (no hardcoded hex).
  * Hidden on /login to keep the sign-in screen uncluttered.
+ * Glass/blur backdrop effect applied via inline styles.
  */
 import { usePathname } from 'next/navigation';
 
@@ -39,10 +40,11 @@ export function BottomNav() {
         height: '3.5rem',
         display: 'flex',
         alignItems: 'stretch',
-        backgroundColor: 'var(--color-bg-page)',
+        backgroundColor: 'var(--glass-nav-bg)',
         borderTop: '1px solid var(--color-outline)',
         zIndex: 50,
       }}
+      className="glass-nav"
     >
       {NAV_ITEMS.map((item) => {
         const isActive = pathname === item.href || (item.href !== '/read' && pathname.startsWith(item.href));
@@ -62,9 +64,11 @@ export function BottomNav() {
               textDecoration: 'none',
               color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
               transition: 'color 120ms ease',
+              position: 'relative',
+              paddingBottom: '0.25rem',
             }}
           >
-            <span style={{ fontSize: '1.125rem', lineHeight: 1 }}>{item.icon}</span>
+            <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{item.icon}</span>
             <span
               style={{
                 fontFamily: 'var(--font-headline)',
@@ -75,6 +79,22 @@ export function BottomNav() {
             >
               {item.label}
             </span>
+            {/* Active indicator dot */}
+            {isActive && (
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  bottom: '0.25rem',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '3px',
+                  height: '3px',
+                  borderRadius: 'var(--radius-full)',
+                  backgroundColor: 'var(--color-primary)',
+                }}
+              />
+            )}
           </a>
         );
       })}

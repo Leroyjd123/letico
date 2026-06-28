@@ -11,13 +11,21 @@ export function useTheme(): { theme: Theme; setTheme: (t: Theme) => void } {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
     const initial = stored ?? 'light';
     setThemeState(initial);
-    document.documentElement.dataset['theme'] = initial === 'light' ? '' : initial;
+    if (initial === 'light') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.dataset['theme'] = initial;
+    }
   }, []);
 
   function setTheme(t: Theme) {
     setThemeState(t);
     localStorage.setItem(STORAGE_KEY, t);
-    document.documentElement.dataset['theme'] = t === 'light' ? '' : t;
+    if (t === 'light') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.dataset['theme'] = t;
+    }
   }
 
   return { theme, setTheme };

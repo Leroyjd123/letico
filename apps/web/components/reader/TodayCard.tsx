@@ -32,39 +32,77 @@ export function TodayCard({
     padding: 'var(--space-6)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 'var(--space-4)',
+    gap: 'var(--space-5)',
     boxShadow: 'var(--shadow-card)',
   };
 
   return (
     <div style={cardStyle} role="region" aria-label={`day ${dayNumber} reading card`}>
-      {/* Day label */}
-      <div>
-        <p
+      {/* Header row: calendar icon + day info */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-4)' }}>
+        {/* Calendar icon */}
+        <div
           style={{
-            fontFamily: 'var(--font-headline)',
-            fontSize: '0.75rem',
-            fontWeight: 500,
-            color: 'var(--color-text-muted)',
-            textTransform: 'lowercase',
-            letterSpacing: '0.05em',
-            marginBottom: 'var(--space-1)',
+            width: '2.75rem',
+            height: '2.75rem',
+            borderRadius: 'var(--radius-lg)',
+            backgroundColor: 'var(--color-primary-fixed)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
           }}
+          aria-hidden="true"
         >
-          day {dayNumber}
-        </p>
-        <h2
-          style={{
-            fontFamily: 'var(--font-headline)',
-            fontSize: '1.25rem',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            textTransform: 'lowercase',
-            margin: 0,
-          }}
-        >
-          {label}
-        </h2>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <rect x="2" y="4" width="16" height="14" rx="2" stroke="var(--color-primary)" strokeWidth="1.5" fill="none"/>
+            <line x1="2" y1="8" x2="18" y2="8" stroke="var(--color-primary)" strokeWidth="1.25"/>
+            <line x1="6" y1="2" x2="6" y2="6" stroke="var(--color-primary)" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="14" y1="2" x2="14" y2="6" stroke="var(--color-primary)" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+
+        {/* Day label */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p
+            style={{
+              fontFamily: 'var(--font-headline)',
+              fontSize: '0.6875rem',
+              fontWeight: 500,
+              color: 'var(--color-primary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.14em',
+              marginBottom: 'var(--space-1)',
+            }}
+          >
+            today&apos;s focus
+          </p>
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.75rem',
+              color: 'var(--color-text-muted)',
+              textTransform: 'lowercase',
+              letterSpacing: '0.04em',
+              marginBottom: 'var(--space-1)',
+            }}
+          >
+            day {dayNumber}
+          </p>
+          <h2
+            style={{
+              fontFamily: 'var(--font-headline)',
+              fontSize: '1.25rem',
+              fontWeight: 500,
+              color: 'var(--color-text-primary)',
+              textTransform: 'lowercase',
+              margin: 0,
+              lineHeight: 1.2,
+            }}
+          >
+            {label}
+          </h2>
+        </div>
       </div>
 
       {/* Progress bar */}

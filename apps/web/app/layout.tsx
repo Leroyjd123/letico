@@ -51,7 +51,7 @@ export default function RootLayout({
         {/* Synchronously restore theme before first paint to prevent flicker */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('lectio_theme');if(t&&t!=='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})()`,
+            __html: `(function(){try{var t=localStorage.getItem('lectio_theme');if(t&&t!=='light'){document.documentElement.setAttribute('data-theme',t);}else{document.documentElement.removeAttribute('data-theme');}}catch(e){}})()`,
           }}
         />
         {/* Inject all design tokens as CSS custom properties on :root */}

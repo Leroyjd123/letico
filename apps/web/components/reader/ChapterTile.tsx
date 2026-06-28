@@ -36,12 +36,12 @@ const STATE_STYLES: Record<ReadState, CSSProperties> = {
     backgroundColor: 'var(--color-bg-surface)',
     color: 'var(--color-text-primary)',
     border: '1.5px solid var(--color-outline)',
-    backgroundImage: 'linear-gradient(to top, rgba(77,97,79,0.15) 50%, transparent 50%)',
+    backgroundImage: 'linear-gradient(to top, var(--chapter-partial-fill) 50%, transparent 50%)',
   },
   unread: {
     backgroundColor: 'var(--color-bg-elevated)',
     color: 'var(--color-text-secondary)',
-    border: '1px solid rgba(77,97,79,0.10)',
+    border: '1px solid var(--chapter-unread-border)',
   },
   locked: {
     backgroundColor: 'var(--color-bg-surface)',
@@ -120,6 +120,7 @@ export function ChapterTile({
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerCancel}
       onPointerCancel={handlePointerCancel}
+      onContextMenu={(e) => e.preventDefault()}
       onKeyDown={handleKeyDown}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -129,7 +130,7 @@ export function ChapterTile({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 'var(--radius-md)',
+        borderRadius: 'var(--radius-lg)',
         fontFamily: 'var(--font-headline)',
         fontWeight: 500,
         fontSize: '0.875rem',
@@ -180,13 +181,13 @@ export function ChapterTile({
             justifyContent: 'center',
             backgroundColor:
               readState === 'read'
-                ? 'rgba(0,0,0,0.35)'
-                : 'rgba(77,97,79,0.08)',
+                ? 'var(--read-hover-overlay)'
+                : 'var(--chapter-hover-overlay)',
             borderRadius: 'inherit',
             fontFamily: 'var(--font-headline)',
             fontSize: '0.5625rem',
             fontWeight: 500,
-            color: readState === 'read' ? '#fff' : 'var(--color-text-secondary)',
+            color: readState === 'read' ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
             textTransform: 'lowercase',
             opacity: hovered ? 1 : 0,
             transition: `opacity var(--duration-base) var(--easing-standard)`,

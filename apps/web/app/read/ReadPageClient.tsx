@@ -21,8 +21,8 @@
  */
 import { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { PlanDayView, Chapter } from '@lectio/types';
-import { getPlanToday, getChapters } from '../../lib/api';
+import type { PlanDayView, Chapter, MeResult } from '@lectio/types';
+import { getPlanToday, getChapters, getMe } from '../../lib/api';
 import { logger } from '../../lib/logger';
 import type { AuthContext } from '../../lib/api';
 import { useAuthContext } from '../../components/providers/AuthProvider';
@@ -82,6 +82,7 @@ export function ReadPageClient() {
   const [modalState, setModalState] = useState<{
     chapterItem: ChapterGridItem;
     chapter: Chapter;
+    isOpen: boolean;
   } | null>(null);
 
   // ── Guest backup nudge ────────────────────────────────────────────────────
@@ -99,6 +100,24 @@ export function ReadPageClient() {
       setShowNudge(true);
     }
   }
+
+  // ── User profile (to detect missing start date) ───────────────────────────
+  const { data: me } = useQuery<MeResult | null>({
+    queryKey: ['me', authKey(auth)],
+    queryFn: async () => {
+      if (!auth) return null;
+
+      try {
+        return await getMe(auth);
+      } catch (err) {
+        logger.info('read:me-query-unavailable', { authType: auth.type, err });
+        return null;
+      }
+    },
+    enabled: auth !== null,
+    staleTime: 300_000,
+    retry: false,
+  });
 
   // ── Plan day ──────────────────────────────────────────────────────────────
   const { data: planDay, isLoading: planLoading } = useQuery<PlanDayView>({
@@ -185,14 +204,18 @@ export function ReadPageClient() {
   function handleLongPress(item: ChapterGridItem) {
     const chapter = allChapters?.find((c) => c.id === item.chapterId);
     if (!chapter) return;
-    setModalState({ chapterItem: item, chapter });
+    setModalState({ chapterItem: item, chapter, isOpen: true });
+  }
+
+  function closeModal() {
+    setModalState((current) => (current ? { ...current, isOpen: false } : null));
   }
 
   function handleMarkFull() {
     if (!modalState || !modalVerses) return;
     markChapter((modalVerses as Array<{ id: number }>).map((v) => v.id));
     incrementChapterCount();
-    setModalState(null);
+    closeModal();
   }
 
   function handleSaveRange(startVerse: number, endVerse: number) {
@@ -201,7 +224,7 @@ export function ReadPageClient() {
       .filter((v) => v.number >= startVerse && v.number <= endVerse)
       .map((v) => v.id);
     markChapter(ids);
-    setModalState(null);
+    closeModal();
   }
 
   function handleMarkDayComplete() {
@@ -288,7 +311,7 @@ export function ReadPageClient() {
             textAlign: 'center',
           }}
         >
-          some reading couldn't sync — it's saved locally and will retry automatically
+          some reading couldn&apos;t sync — it&apos;s saved locally and will retry automatically
         </div>
       )}
 
@@ -300,21 +323,38 @@ export function ReadPageClient() {
           paddingBottom: 'calc(var(--space-6) + 5rem)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 'var(--space-6)',
+          gap: 'var(--space-8)',
         }}
       >
-        <h1
-          style={{
-            fontFamily: 'var(--font-headline)',
-            fontSize: '1.75rem',
-            fontWeight: 600,
-            color: 'var(--color-text-primary)',
-            textTransform: 'lowercase',
-            margin: 0,
-          }}
-        >
-          lectio
-        </h1>
+        {/* Hero header */}
+        <div>
+          <h1
+            style={{
+              fontFamily: 'var(--font-headline)',
+              fontSize: '2.25rem',
+              fontWeight: 500,
+              color: 'var(--color-text-primary)',
+              textTransform: 'lowercase',
+              margin: 0,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.1,
+            }}
+          >
+            lectio
+          </h1>
+          <p
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '0.875rem',
+              color: 'var(--color-text-muted)',
+              textTransform: 'lowercase',
+              marginTop: 'var(--space-2)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            your sanctuary of slow reflection.
+          </p>
+        </div>
 
         {/* Guest backup nudge — one per session, after 10 chapters */}
         {showNudge && (
@@ -335,6 +375,30 @@ export function ReadPageClient() {
           onMarkDayComplete={handleMarkDayComplete}
         />
 
+        {/* Start date nudge — shown until user sets plan_start_date in settings */}
+        {me?.planStartDate === null && (
+          <a
+            href="/settings"
+            style={{
+              display: 'block',
+              padding: 'var(--space-3) var(--space-4)',
+              backgroundColor: 'var(--color-bg-surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--color-outline)',
+              fontFamily: 'var(--font-headline)',
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary)',
+              textTransform: 'lowercase',
+              textDecoration: 'none',
+            }}
+          >
+            set your reading start date in settings to track your plan progress
+            <span style={{ color: 'var(--color-primary)', marginLeft: 'var(--space-2)' }}>
+              go to settings
+            </span>
+          </a>
+        )}
+
         <OpenInJWButton book={planDay.book} chapter={planDay.chapter} label={planDay.label} />
 
         {chapterItems.length > 0 && (
@@ -342,11 +406,12 @@ export function ReadPageClient() {
             <p
               style={{
                 fontFamily: 'var(--font-headline)',
-                fontSize: '0.8125rem',
+                fontSize: '0.875rem',
                 fontWeight: 500,
-                color: 'var(--color-text-muted)',
+                color: 'var(--color-text-secondary)',
                 textTransform: 'lowercase',
-                marginBottom: 'var(--space-3)',
+                letterSpacing: '0.06em',
+                marginBottom: 'var(--space-4)',
               }}
             >
               chapters
@@ -364,13 +429,14 @@ export function ReadPageClient() {
 
       {modalState && (
         <VerseSelectorModal
-          isOpen={true}
+          isOpen={modalState.isOpen}
           chapterName={`${planDay.label.split(' ')[0] ?? ''} ${modalState.chapter.number}`}
           totalVerses={modalState.chapter.verseCount}
           readVerseNumbers={modalReadNums}
           onMarkFull={handleMarkFull}
           onSaveRange={handleSaveRange}
-          onClose={() => setModalState(null)}
+          onClose={closeModal}
+          onExited={() => setModalState(null)}
         />
       )}
     </>

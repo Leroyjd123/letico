@@ -35,9 +35,9 @@
 | --- | --- |
 | **Active Phase** | Phase 7 — Polish & Hardening |
 | **Last Completed Phase** | Phase 7 — Polish & Hardening |
-| **Last Updated By** | Claude Sonnet 4.6 |
-| **Last Updated On** | 2026-04-02 |
-| **Next Step** | All phases complete — deploy or begin Phase 8 if planned |
+| **Last Updated By** | Codex |
+| **Last Updated On** | 2026-04-07 |
+| **Next Step** | Verify the hardening pass in-browser and stage the release branch |
 
 ---
 
@@ -204,6 +204,7 @@
 | [x] | `VerseSelectorModal` a11y: Escape key, focus trap, `sheetRef` + `tabIndex` | Claude Sonnet 4.6 | 2026-04-02 |
 | [x] | `ChapterTile` a11y: `Alt+Enter` keyboard trigger for long-press | Claude Sonnet 4.6 | 2026-04-02 |
 | [x] | Storybook 8 config (`@storybook/nextjs`) + 14 component stories | Claude Sonnet 4.6 | 2026-04-02 |
+| [x] | Hardening pass: non-interactive lint setup, theme attr cleanup, theme-aware nav/modal styling, start-date nudge safeguards, verse selector exit lifecycle, focused UI regression tests | Codex | 2026-04-07 |
 | [x] | Playwright config + 6 E2E journey specs (guest, verse selector, day complete, offline, OTP, read-ahead) | Claude Sonnet 4.6 | 2026-04-02 |
 | [x] | Unit tests: `UsersService.updateUser` — 6 tests | Claude Sonnet 4.6 | 2026-04-02 |
 | [x] | Unit tests: `ProgressService.resetProgress` — 4 tests | Claude Sonnet 4.6 | 2026-04-02 |
