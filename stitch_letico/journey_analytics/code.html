@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&amp;family=Manrope:wght@300;400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "outline": "#737872",
+            "tertiary-fixed-dim": "#b5c9d7",
+            "on-secondary-fixed": "#1f1b14",
+            "on-tertiary-fixed": "#091e28",
+            "surface-dim": "#dbdad7",
+            "on-surface": "#1b1c1a",
+            "inverse-surface": "#2f312f",
+            "inverse-primary": "#b6ccb6",
+            "on-secondary-container": "#686259",
+            "on-primary-container": "#f7fff3",
+            "on-primary-fixed": "#0d1f11",
+            "on-tertiary-fixed-variant": "#364954",
+            "on-surface-variant": "#434842",
+            "surface-container-high": "#e9e8e5",
+            "primary-container": "#657a67",
+            "surface": "#faf9f6",
+            "surface-container-low": "#f4f3f0",
+            "secondary-container": "#e8ded3",
+            "surface-container-lowest": "#ffffff",
+            "outline-variant": "#c3c8c0",
+            "background": "#faf9f6",
+            "tertiary-fixed": "#d1e5f3",
+            "on-secondary": "#ffffff",
+            "on-primary-fixed-variant": "#384b3a",
+            "on-error-container": "#93000a",
+            "inverse-on-surface": "#f2f1ee",
+            "surface-bright": "#faf9f6",
+            "primary-fixed": "#d2e8d1",
+            "surface-tint": "#4f6351",
+            "error": "#ba1a1a",
+            "secondary-fixed": "#eae1d6",
+            "tertiary": "#4b5f6a",
+            "secondary": "#645d55",
+            "tertiary-container": "#647783",
+            "primary-fixed-dim": "#b6ccb6",
+            "on-error": "#ffffff",
+            "secondary-fixed-dim": "#cec5ba",
+            "surface-container-highest": "#e3e2df",
+            "primary": "#4d614f",
+            "surface-container": "#efeeeb",
+            "on-primary": "#ffffff",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-container": "#fbfcff",
+            "error-container": "#ffdad6",
+            "on-secondary-fixed-variant": "#4b463e",
+            "on-background": "#1b1c1a",
+            "surface-variant": "#e3e2df"
+          },
+          fontFamily: {
+            "headline": ["Manrope"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+      font-size: 20px;
+    }
+    body {
+      background-color: #faf9f6;
+      color: #1b1c1a;
+      -webkit-font-smoothing: antialiased;
+    }
+    .text-deep-grey { color: #2F2F2F; }
+    .bg-warm-off-white { background-color: #F6F5F2; }
+    .lowercase { text-transform: lowercase; }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex items-center justify-between px-8 h-16 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[#4d614f] dark:text-[#7A8F7B]">menu_book</span>
+<h1 class="font-manrope lowercase text-xl text-[#4d614f] dark:text-[#7A8F7B]">lectio</h1>
+</div>
+<div class="hidden md:flex gap-8">
+<span class="text-stone-400 dark:text-stone-500 font-inter lowercase text-[13px] tracking-wide hover:opacity-80 transition-opacity cursor-pointer">reading</span>
+<span class="text-[#4d614f] dark:text-[#7A8F7B] font-inter lowercase text-[13px] tracking-wide font-medium">analytics</span>
+<span class="text-stone-400 dark:text-stone-500 font-inter lowercase text-[13px] tracking-wide hover:opacity-80 transition-opacity cursor-pointer">settings</span>
+</div>
+</header>
+<main class="pt-24 pb-32 px-6 max-w-screen-md mx-auto min-h-screen">
+<!-- Hero Header -->
+<section class="mb-16">
+<h2 class="font-headline text-4xl font-light lowercase tracking-tight text-deep-grey mb-2">your journey</h2>
+<p class="font-body text-on-surface-variant lowercase tracking-wide opacity-70">a quiet reflection on your progress</p>
+</section>
+<!-- Bento Grid Stats -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6 mb-12">
+<!-- Primary Stat: Status -->
+<div class="md:col-span-7 bg-surface-container-low p-8 rounded-xl flex flex-col justify-between min-h-[220px]">
+<label class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant opacity-60">status</label>
+<div>
+<h3 class="font-headline text-3xl font-light text-deep-grey lowercase leading-tight">
+            currently <span class="text-primary">2 days ahead</span> of your reading intention
+          </h3>
+</div>
+<div class="flex items-center gap-2 text-primary opacity-80">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="text-xs lowercase">maintaining a gentle pace</span>
+</div>
+</div>
+<!-- Secondary Stat: Completion -->
+<div class="md:col-span-5 bg-surface-container-highest/30 p-8 rounded-xl flex flex-col justify-between">
+<label class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant opacity-60">completion</label>
+<div class="mt-4">
+<div class="text-5xl font-headline font-light text-deep-grey mb-2">32%</div>
+<div class="w-full bg-outline-variant/20 h-[2px] overflow-hidden">
+<div class="bg-primary h-full w-[32%] opacity-60"></div>
+</div>
+</div>
+<p class="text-[11px] font-label lowercase text-on-surface-variant mt-4 opacity-70 leading-relaxed">
+          you have finished 4 of 12 chapters this month.
+        </p>
+</div>
+<!-- Tertiary Stat: Streak -->
+<div class="md:col-span-5 bg-surface-container-highest/30 p-8 rounded-xl flex flex-col justify-center items-center text-center">
+<label class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant opacity-60 mb-6">streak</label>
+<div class="relative inline-flex items-center justify-center">
+<!-- Decorative circle -->
+<div class="absolute inset-0 rounded-full border border-primary/10 scale-150"></div>
+<div class="text-4xl font-headline font-light text-primary">5 days</div>
+</div>
+<p class="text-[11px] font-label lowercase text-on-surface-variant mt-8 opacity-70">
+          consistent reading since monday.
+        </p>
+</div>
+<!-- Graph Section -->
+<div class="md:col-span-7 bg-surface-container-lowest p-8 rounded-xl shadow-[0_4px_24px_rgba(0,0,0,0.02)] flex flex-col">
+<div class="flex justify-between items-start mb-10">
+<label class="font-label text-xs uppercase tracking-[0.2em] text-on-surface-variant opacity-60">progress over time</label>
+<span class="text-[10px] font-label text-on-surface-variant opacity-50 lowercase">oct 14 — oct 21</span>
+</div>
+<div class="relative flex-grow h-32 flex items-end justify-between px-2">
+<!-- Minimal Line Graph Representation -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,85 Q15,80 25,60 T50,65 T75,40 T100,30" fill="none" opacity="0.4" stroke="#4d614f" stroke-linecap="round" stroke-width="0.75"></path>
+<circle cx="25" cy="60" fill="#4d614f" r="1.5"></circle>
+<circle cx="50" cy="65" fill="#4d614f" r="1.5"></circle>
+<circle cx="75" cy="40" fill="#4d614f" r="1.5"></circle>
+<circle cx="100" cy="30" fill="#4d614f" r="1.5"></circle>
+</svg>
+<!-- X-Axis Labels -->
+<div class="absolute bottom-[-24px] w-full flex justify-between text-[10px] text-on-surface-variant opacity-40 lowercase px-1">
+<span>mon</span>
+<span>wed</span>
+<span>fri</span>
+<span>sun</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Editorial Quote / Insight -->
+<section class="mt-20 px-4 text-center">
+<div class="inline-block w-8 h-[1px] bg-outline-variant mb-6 opacity-40 mx-auto"></div>
+<blockquote class="font-headline italic text-xl text-deep-grey/80 leading-relaxed max-w-md mx-auto">
+        "reading is a conversation. all resistance to that conversation is the begining of a new thought."
+      </blockquote>
+<div class="mt-4 text-[11px] font-label lowercase text-on-surface-variant opacity-40 tracking-widest">— journal entry, oct 18</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-6 pb-6 pt-2 bg-[#faf9f6]/85 backdrop-blur-md dark:bg-stone-900/85 shadow-[0_-4px_32px_rgba(27,28,26,0.04)] md:hidden">
+<button class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all tap-highlight-none">
+<span class="material-symbols-outlined mb-1">auto_stories</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">reading</span>
+</button>
+<button class="flex flex-col items-center justify-center text-[#4d614f] dark:text-[#7A8F7B] scale-110 transition-transform tap-highlight-none">
+<span class="material-symbols-outlined mb-1">insert_chart_outlined</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">analytics</span>
+</button>
+<button class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 opacity-60 hover:opacity-100 transition-all tap-highlight-none">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="font-inter lowercase text-[11px] tracking-wide font-regular">settings</span>
+</button>
+</nav>
+</body></html>

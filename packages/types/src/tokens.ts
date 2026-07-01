@@ -37,6 +37,16 @@ export const COLOR_TOKENS = {
 
   // Ghost border (high-density fallback only)
   ghostBorder: 'rgba(195,200,192,0.2)',
+
+  // Analytics
+  statCardBg: 'rgba(227,226,223,0.35)',
+
+  // Structural
+  outline: 'rgba(27,28,26,0.1)',
+
+  // Semantic states
+  success: '#4a7c59',
+  error: '#b00020',
 } as const;
 
 export const SPACE_TOKENS = {
@@ -78,6 +88,7 @@ export const EASING_TOKENS = {
 export const SHADOW_TOKENS = {
   floating: '0 8px 40px rgba(27,28,26,0.08)',
   continuePill: '0 8px 40px rgba(77,97,79,0.25)',
+  card: '0 2px 8px rgba(27,28,26,0.08)',
 } as const;
 
 /**

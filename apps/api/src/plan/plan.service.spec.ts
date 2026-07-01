@@ -178,6 +178,116 @@ describe('PlanService', () => {
     });
   });
 
+  describe('listPlans', () => {
+    /**
+     * listPlans() does two DB operations:
+     *   1. from('plans').select('id, name')           → array result (no .single())
+     *   2. from('plan_days').select(...).eq().order().limit().single() → one call per plan
+     *
+     * We need a separate mock builder because the plans query resolves without .single().
+     */
+    function buildListPlansMockClient(
+      plansData: Array<{ id: string; name: string }> | null,
+      plansError: unknown = null,
+      dayCountByPlanId: Record<string, number | null> = {},
+    ) {
+      return {
+        from: jest.fn().mockImplementation((table: string) => {
+          if (table === 'plans') {
+            return {
+              select: jest.fn().mockResolvedValue({ data: plansData, error: plansError }),
+            };
+          }
+          if (table === 'plan_days') {
+            let capturedPlanId: string | null = null;
+            const chain: Record<string, jest.Mock> = {
+              select: jest.fn().mockImplementation(() => chain),
+              eq: jest.fn().mockImplementation((_col: string, val: string) => {
+                capturedPlanId = val;
+                return chain;
+              }),
+              order: jest.fn().mockImplementation(() => chain),
+              limit: jest.fn().mockImplementation(() => chain),
+              single: jest.fn().mockImplementation(() => {
+                const dayNumber =
+                  capturedPlanId !== null ? (dayCountByPlanId[capturedPlanId] ?? null) : null;
+                const data = dayNumber !== null ? { day_number: dayNumber } : null;
+                return Promise.resolve({ data, error: null });
+              }),
+            };
+            return chain;
+          }
+          return {
+            select: jest.fn().mockResolvedValue({
+              data: null,
+              error: { message: 'unexpected table' },
+            }),
+          };
+        }),
+      };
+    }
+
+    it('returns empty array when DB returns an error on the plans query', async () => {
+      const mockClient = buildListPlansMockClient(null, { message: 'db error' });
+      await createService(mockClient);
+
+      const result = await service.listPlans();
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when plansData is null', async () => {
+      const mockClient = buildListPlansMockClient(null, null);
+      await createService(mockClient);
+
+      const result = await service.listPlans();
+      expect(result).toEqual([]);
+    });
+
+    it('returns empty array when no plans exist', async () => {
+      const mockClient = buildListPlansMockClient([], null);
+      await createService(mockClient);
+
+      const result = await service.listPlans();
+      expect(result).toEqual([]);
+    });
+
+    it('returns a single plan with correct totalDays', async () => {
+      const plans = [{ id: 'plan-1', name: '1 year plan' }];
+      const mockClient = buildListPlansMockClient(plans, null, { 'plan-1': 365 });
+      await createService(mockClient);
+
+      const result = await service.listPlans();
+      expect(result).toEqual([{ id: 'plan-1', name: '1 year plan', totalDays: 365 }]);
+    });
+
+    it('returns multiple plans with correct totalDays each', async () => {
+      const plans = [
+        { id: 'plan-a', name: '1 year plan' },
+        { id: 'plan-b', name: '6 month plan' },
+      ];
+      const mockClient = buildListPlansMockClient(plans, null, {
+        'plan-a': 365,
+        'plan-b': 180,
+      });
+      await createService(mockClient);
+
+      const result = await service.listPlans();
+      expect(result).toHaveLength(2);
+      expect(result).toContainEqual({ id: 'plan-a', name: '1 year plan', totalDays: 365 });
+      expect(result).toContainEqual({ id: 'plan-b', name: '6 month plan', totalDays: 180 });
+    });
+
+    it('sets totalDays to 0 when plan_days has no rows for a plan', async () => {
+      const plans = [{ id: 'plan-empty', name: 'empty plan' }];
+      // dayData will be null → totalDays = 0
+      const mockClient = buildListPlansMockClient(plans, null, { 'plan-empty': null });
+      await createService(mockClient);
+
+      const result = await service.listPlans();
+      expect(result).toEqual([{ id: 'plan-empty', name: 'empty plan', totalDays: 0 }]);
+    });
+  });
+
   describe('buildLabel (via getPlanToday)', () => {
     it('produces single-chapter label when start and end are in the same chapter', async () => {
       const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: null };

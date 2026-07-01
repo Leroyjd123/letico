@@ -72,7 +72,7 @@ describe('AuthService.createGuest', () => {
     expect(result.createdAt).toBe('2026-03-30T00:00:00Z');
   });
 
-  it('inserts with today as plan_start_date', async () => {
+  it('does not set plan_start_date on guest creation (user sets it in Settings)', async () => {
     const insertChain = buildInsertChain({ guest_token: 'tok', created_at: '2026-03-30T00:00:00Z' });
     const mockClient = {
       from: jest.fn().mockImplementation((t: string) =>
@@ -83,9 +83,8 @@ describe('AuthService.createGuest', () => {
 
     await service.createGuest();
 
-    expect(insertChain.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ plan_start_date: TODAY }),
-    );
+    const insertArg = (insertChain.insert.mock.calls[0] as unknown[][])[0] as Record<string, unknown>;
+    expect(insertArg['plan_start_date']).toBeUndefined();
   });
 
   it('assigns the 1yr plan as default plan_id', async () => {

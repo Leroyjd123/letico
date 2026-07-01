@@ -20,6 +20,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { markVersesRead } from '../lib/api';
 import type { AuthContext } from '../lib/api';
 import { enqueueVerseReads, markSynced } from '../lib/offlineQueue';
+import { logger } from '../lib/logger';
 
 function authId(auth: AuthContext | null): string {
   if (!auth) return 'anon';
@@ -39,9 +40,13 @@ export function useVerseRead(auth: AuthContext | null): UseVerseReadResult {
   const [isPending, setIsPending] = useState(false);
 
   function submit(verseIds: number[]): void {
-    if (!verseIds.length) return;
+    if (!verseIds.length) {
+      logger.info('useVerseRead:submit:empty', 'called with 0 verse IDs — skipping');
+      return;
+    }
 
     void (async () => {
+      logger.action('useVerseRead:submit', { verseCount: verseIds.length, online: navigator.onLine });
       // ── Step 1: Optimistic update ────────────────────────────────────────────
       await queryClient.cancelQueries({ queryKey: ['progress'] });
 
@@ -59,17 +64,20 @@ export function useVerseRead(auth: AuthContext | null): UseVerseReadResult {
       if (typeof navigator !== 'undefined' && navigator.onLine && auth) {
         setIsPending(true);
         try {
-          await markVersesRead(verseIds, auth);
-          // On success: mark the queued item as synced so flush skips it
+          const result = await markVersesRead(verseIds, auth);
+          logger.action('useVerseRead:api:success', result);
           if (!enqueued.dropped) {
             await markSynced([enqueued.id]);
           }
-        } catch {
+        } catch (err) {
+          logger.error('useVerseRead:api:failed', err);
           // API failed — leave the IndexedDB item unsynced.
           // useOfflineQueue will retry when connectivity returns.
         } finally {
           setIsPending(false);
         }
+      } else {
+        logger.info('useVerseRead:offline-queue', { dropped: enqueued.dropped });
       }
 
       // ── Step 4: Refresh derived queries ──────────────────────────────────────

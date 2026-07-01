@@ -104,4 +104,41 @@ export interface MigrateGuestResult {
   alreadyMigrated: boolean;
 }
 
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface PlanListItem {
+  id: string;
+  name: string;
+  totalDays: number;
+}
+
+export interface UpdateUserResult {
+  planId: string | null;
+  planStartDate: string | null;
+}
+
+export interface ResetProgressResult {
+  archivedCount: number;
+}
+
+export interface ExportVerseRead {
+  verseId: number;
+  readAt: string;
+}
+
+export interface ExportProgressResult {
+  userId: string;
+  exportedAt: string;
+  verseReads: ExportVerseRead[];
+}
+
+export interface MeResult {
+  id: string;
+  planId: string | null;
+  planStartDate: string | null;
+}
+
 export type { };

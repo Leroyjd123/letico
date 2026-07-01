@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&amp;family=Inter:wght@300;400&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "tertiary-fixed": "#d1e5f3",
+              "primary-fixed": "#d2e8d1",
+              "on-primary-fixed-variant": "#384b3a",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary": "#ffffff",
+              "on-primary": "#ffffff",
+              "inverse-surface": "#2f312f",
+              "surface-dim": "#dbdad7",
+              "primary-container": "#657a67",
+              "surface-tint": "#4f6351",
+              "primary-fixed-dim": "#b6ccb6",
+              "outline": "#737872",
+              "tertiary-fixed-dim": "#b5c9d7",
+              "surface-variant": "#e3e2df",
+              "surface-container-low": "#f4f3f0",
+              "secondary": "#645d55",
+              "on-secondary-fixed-variant": "#4b463e",
+              "on-primary-fixed": "#0d1f11",
+              "secondary-container": "#e8ded3",
+              "primary": "#4d614f",
+              "secondary-fixed": "#eae1d6",
+              "on-tertiary-container": "#fbfcff",
+              "background": "#faf9f6",
+              "surface-container-highest": "#e3e2df",
+              "on-error": "#ffffff",
+              "on-background": "#1b1c1a",
+              "on-secondary-container": "#686259",
+              "tertiary": "#4b5f6a",
+              "surface-container": "#efeeeb",
+              "on-error-container": "#93000a",
+              "on-surface": "#1b1c1a",
+              "outline-variant": "#c3c8c0",
+              "surface-bright": "#faf9f6",
+              "on-primary-container": "#f7fff3",
+              "surface": "#faf9f6",
+              "on-tertiary-fixed": "#091e28",
+              "error-container": "#ffdad6",
+              "on-secondary-fixed": "#1f1b14",
+              "secondary-fixed-dim": "#cec5ba",
+              "inverse-primary": "#b6ccb6",
+              "on-tertiary-fixed-variant": "#364954",
+              "surface-container-high": "#e9e8e5",
+              "on-tertiary": "#ffffff",
+              "tertiary-container": "#647783",
+              "on-surface-variant": "#434842",
+              "error": "#ba1a1a",
+              "inverse-on-surface": "#f2f1ee"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+            font-size: 20px;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        input[type='range'] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type='range']::-webkit-slider-runnable-track {
+            background: #e3e2df;
+            height: 2px;
+            border-radius: 2px;
+        }
+        input[type='range']::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            background: #4d614f;
+            border-radius: 50%;
+            margin-top: -7px;
+            cursor: pointer;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- HOME EXPERIENCE BACKGROUND (SCREEN_6 ANALOGUE) -->
+<div class="fixed inset-0 overflow-hidden">
+<div class="p-8 md:p-12 max-w-7xl mx-auto h-full flex flex-col gap-8">
+<!-- Header Section -->
+<header class="flex justify-between items-end">
+<div class="space-y-1">
+<p class="font-label text-tertiary text-xs lowercase tracking-widest">good morning</p>
+<h1 class="font-headline text-4xl text-primary font-light lowercase">welcome home</h1>
+</div>
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">spa</span>
+</div>
+</header>
+<!-- Bento Grid Content (Blured Background) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow">
+<div class="md:col-span-2 bg-surface-container-low rounded-xl p-8 flex flex-col justify-end relative overflow-hidden group">
+<img class="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-multiply transition-transform duration-700 group-hover:scale-105" data-alt="misty morning forest with soft sunlight filtering through pine needles and delicate textures" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxDjdmA3LvfwT9lgqSj59MQeGz_TNZ2rHXy_k9sx1fn-l9BC_KWWlEzFa2a3NChFHd7pSSSvm8p8ZX5b0V59_FSzGujLHngetru6VTpwgqOileLcllo3jEJdPrR6LaPr0ZjWDTttxBMnEGFn2f1NYbClAtBjM4q5I04JDVcA12JtpB9bx_O3z-wpzSIeeh5HGaINUMJGt3ltXSOB0WANqswEq7tTSg9N-yWxK-qI3__FTklqbi0MzMmV-1fs2LZFFJ0AhoCd_ej-8"/>
+<div class="relative z-10 space-y-4">
+<span class="font-label text-xs lowercase bg-white/50 backdrop-blur px-3 py-1 rounded-full text-primary">daily reading</span>
+<h2 class="font-headline text-3xl lowercase leading-tight max-w-md">the light shines in the darkness, and the darkness has not overcome it.</h2>
+</div>
+</div>
+<div class="bg-surface-container-highest rounded-xl p-6 flex flex-col justify-between">
+<div class="space-y-4">
+<span class="material-symbols-outlined text-tertiary">auto_stories</span>
+<p class="font-headline text-xl lowercase">my current path</p>
+</div>
+<div class="bg-white/40 p-4 rounded-lg">
+<p class="text-sm lowercase text-on-surface-variant">john 1:5</p>
+<div class="w-full bg-outline-variant/20 h-1 mt-3 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-1/3"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL OVERLAY -->
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-[#1b1c1a]/20 backdrop-blur-[2px]">
+<!-- VERSE SELECTOR MODAL -->
+<div class="relative w-[90%] max-w-md bg-[#faf9f6] rounded-xl shadow-[0_32px_64px_-12px_rgba(27,28,26,0.12)] overflow-hidden flex flex-col transform transition-all">
+<!-- TOP APP BAR (MODAL HEADER) -->
+<header class="flex justify-between items-center px-8 py-5 w-full bg-[#faf9f6]/85 backdrop-blur-md">
+<button class="hover:opacity-70 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-[#4d614f]">close</span>
+</button>
+<h2 class="font-manrope lowercase tracking-tight text-lg font-semibold text-[#4d614f]">verse selector</h2>
+<button class="hover:opacity-70 transition-opacity active:scale-95 duration-200">
+<span class="font-manrope lowercase tracking-tight text-[#4d614f]">save</span>
+</button>
+</header>
+<!-- MODAL CONTENT -->
+<div class="px-8 pt-4 pb-10 space-y-10">
+<!-- Title & Current Selection -->
+<div class="text-center space-y-2">
+<h3 class="font-headline text-2xl lowercase text-primary tracking-tight">genesis 12</h3>
+<p class="font-label text-tertiary text-sm tracking-wide lowercase opacity-60">selecting verses 1–18</p>
+</div>
+<!-- Range Selector Visual -->
+<div class="space-y-8">
+<div class="flex flex-col gap-4">
+<div class="flex justify-between items-center font-label text-[10px] text-tertiary lowercase tracking-widest px-1">
+<span>start</span>
+<span>end</span>
+</div>
+<div class="relative h-12 flex items-center px-2 bg-surface-container-low rounded-lg">
+<input class="w-full cursor-pointer accent-primary" max="50" min="1" type="range" value="1"/>
+</div>
+</div>
+<!-- Verse Grid (Subtle Visual Aid) -->
+<div class="grid grid-cols-6 gap-2 opacity-40">
+<div class="aspect-square bg-primary rounded-sm flex items-center justify-center text-[10px] text-white">1</div>
+<div class="aspect-square bg-primary rounded-sm flex items-center justify-center text-[10px] text-white">2</div>
+<div class="aspect-square bg-primary rounded-sm flex items-center justify-center text-[10px] text-white">3</div>
+<div class="aspect-square bg-primary-fixed rounded-sm flex items-center justify-center text-[10px] text-on-primary-fixed-variant">4</div>
+<div class="aspect-square bg-surface-container-high rounded-sm flex items-center justify-center text-[10px] text-on-surface-variant">...</div>
+<div class="aspect-square bg-surface-container-high rounded-sm flex items-center justify-center text-[10px] text-on-surface-variant">50</div>
+</div>
+</div>
+<!-- ACTIONS -->
+<div class="flex flex-col gap-3 pt-4">
+<button class="w-full py-4 bg-primary text-white rounded-full font-label text-sm lowercase tracking-wide transition-all hover:opacity-90 active:scale-[0.98] duration-200">
+                        mark full
+                    </button>
+<button class="w-full py-4 bg-secondary-container text-on-secondary-container rounded-full font-label text-sm lowercase tracking-wide transition-all hover:opacity-80 active:scale-[0.98] duration-200">
+                        save
+                    </button>
+</div>
+</div>
+<!-- DECORATIVE TOUCH -->
+<div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-primary/10 via-primary/30 to-primary/10"></div>
+</div>
+</div>
+<!-- BOTTOM NAV BAR (HIDDEN IN MODAL STATE BUT DEFINED BY JSON) -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-6 pb-6 pt-2 bg-[#faf9f6]/85 dark:bg-[#1b1c1a]/85 backdrop-blur-md z-50 rounded-t-3xl shadow-[0_-4px_32px_rgba(27,28,26,0.04)] pointer-events-none opacity-50">
+<div class="flex flex-col items-center justify-center bg-[#4d614f] text-white rounded-full p-3 scale-90 duration-300 ease-out">
+<span class="material-symbols-outlined">home_max</span>
+<span class="font-inter text-[10px] lowercase tracking-wide mt-1">home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#4b5f6a] opacity-60 p-3">
+<span class="material-symbols-outlined">auto_stories</span>
+<span class="font-inter text-[10px] lowercase tracking-wide mt-1">journal</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#4b5f6a] opacity-60 p-3">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-inter text-[10px] lowercase tracking-wide mt-1">library</span>
+</div>
+<div class="flex flex-col items-center justify-center text-[#4b5f6a] opacity-60 p-3">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-inter text-[10px] lowercase tracking-wide mt-1">settings</span>
+</div>
+</nav>
+</body></html>
