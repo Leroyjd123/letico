@@ -22,11 +22,15 @@ const GUEST_TOKEN_KEY = 'lectio_guest_token';
 export interface AuthState {
   auth: AuthContext | null;
   isProvisioning: boolean;
+  error: string | null;
+  retry: () => void;
 }
 
 export function useAuth(): AuthState {
   const [auth, setAuth] = useState<AuthContext | null>(null);
   const [isProvisioning, setIsProvisioning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const supabase = getBrowserSupabaseClient();
@@ -54,13 +58,16 @@ export function useAuth(): AuthState {
 
       // Path 3: auto-provision a new guest — no button click required
       setIsProvisioning(true);
+      setError(null);
       try {
         const guest = await createGuest();
         if (cancelled) return;
         localStorage.setItem(GUEST_TOKEN_KEY, guest.guestToken);
         setAuth({ type: 'guest', guestToken: guest.guestToken });
       } catch {
-        // Silently fail — the app remains in the null state and will retry on next mount
+        if (!cancelled) {
+          setError("couldn't set up your session — check your connection and try again");
+        }
       } finally {
         if (!cancelled) setIsProvisioning(false);
       }
@@ -90,9 +97,13 @@ export function useAuth(): AuthState {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [retryCount]);
 
-  return { auth, isProvisioning };
+  function retry() {
+    setRetryCount((c) => c + 1);
+  }
+
+  return { auth, isProvisioning, error, retry };
 }
 
 /** Persists a guest token to localStorage. Used by Phase 5 migration after OTP sign-in. */

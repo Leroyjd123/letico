@@ -128,6 +128,18 @@ export function VerseSelectorModal({
     if (e.target === overlayRef.current) onClose();
   }
 
+  // Tapping a verse bubble/dot selects it directly; shift-tap extends the
+  // current selection into a range. Complements the slider for precise picks.
+  function handleVerseClick(verseNum: number, shiftKey: boolean) {
+    if (shiftKey) {
+      setStartVerse(Math.min(startVerse, verseNum));
+      setEndVerse(Math.max(endVerse, verseNum));
+    } else {
+      setStartVerse(verseNum);
+      setEndVerse(verseNum);
+    }
+  }
+
   function handleSave() {
     onSaveRange(startVerse, endVerse);
   }
@@ -440,9 +452,13 @@ export function VerseSelectorModal({
                     : 'var(--color-text-muted)';
 
                   return (
-                    <div
+                    <button
                       key={verseNum}
+                      type="button"
+                      onClick={(e) => handleVerseClick(verseNum, e.shiftKey)}
                       title={`verse ${verseNum}`}
+                      aria-label={`verse ${verseNum}${isRead ? ', read' : ''}${isSelected ? ', selected' : ''}`}
+                      aria-pressed={isSelected}
                       style={{
                         width: '2.5rem',
                         height: '2.5rem',
@@ -455,12 +471,14 @@ export function VerseSelectorModal({
                         fontFamily: 'var(--font-headline)',
                         fontSize: '0.75rem',
                         fontWeight: isRead ? 600 : 400,
+                        cursor: 'pointer',
+                        padding: 0,
                         transition: `background-color var(--duration-fast) var(--easing-standard), color var(--duration-fast) var(--easing-standard)`,
                         border: isRead || isSelected ? 'none' : '1px solid var(--color-outline)',
                       }}
                     >
                       {verseNum}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -486,17 +504,32 @@ export function VerseSelectorModal({
                     : 'var(--color-bg-elevated)';
 
                   return (
-                    <div
+                    <button
                       key={verseNum}
+                      type="button"
+                      onClick={(e) => handleVerseClick(verseNum, e.shiftKey)}
                       title={`verse ${verseNum}`}
+                      aria-label={`verse ${verseNum}${isRead ? ', read' : ''}${isSelected ? ', selected' : ''}`}
+                      aria-pressed={isSelected}
                       style={{
                         aspectRatio: '1',
+                        minHeight: '1.75rem',
                         borderRadius: 'var(--radius-sm)',
                         backgroundColor: dotColor,
+                        color: isRead ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+                        fontFamily: 'var(--font-body)',
+                        fontSize: '0.625rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
                         transition: `background-color var(--duration-fast) var(--easing-standard)`,
                         border: isRead || isSelected ? 'none' : '1px solid var(--color-outline)',
                       }}
-                    />
+                    >
+                      {verseNum}
+                    </button>
                   );
                 })}
               </div>

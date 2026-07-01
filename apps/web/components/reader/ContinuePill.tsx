@@ -19,7 +19,8 @@ interface ContinuePillProps {
 export function ContinuePill({ position, onClick }: ContinuePillProps) {
   const baseStyle: CSSProperties = {
     position: 'fixed',
-    bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--space-6))',
+    // BottomNav is a fixed 3.5rem bar with its own safe-area padding — clear it with a gap.
+    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 3.5rem + var(--space-4))',
     left: '50%',
     transform: 'translateX(-50%)',
     display: 'inline-flex',

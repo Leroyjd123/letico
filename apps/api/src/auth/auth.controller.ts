@@ -6,9 +6,11 @@
  * Phase 5: OTP send/verify, guest migration.
  */
 import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
+import { SendOtpDto, VerifyOtpDto, MigrateGuestDto, DemoLoginDto } from './auth.types';
 
 @Controller('auth')
 export class AuthController {
@@ -21,6 +23,7 @@ export class AuthController {
    */
   @Post('guest')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async createGuest() {
     const data = await this.authService.createGuest();
     return { data };
@@ -44,8 +47,9 @@ export class AuthController {
    */
   @Post('otp/send')
   @HttpCode(HttpStatus.OK)
-  async sendOtp(@Body() body: { email: string }) {
-    const data = await this.authService.sendOtp(body.email ?? '');
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async sendOtp(@Body() body: SendOtpDto) {
+    const data = await this.authService.sendOtp(body.email);
     return { data };
   }
 
@@ -56,8 +60,22 @@ export class AuthController {
    */
   @Post('otp/verify')
   @HttpCode(HttpStatus.OK)
-  async verifyOtp(@Body() body: { email: string; token: string }) {
-    const data = await this.authService.verifyOtp(body.email ?? '', body.token ?? '');
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async verifyOtp(@Body() body: VerifyOtpDto) {
+    const data = await this.authService.verifyOtp(body.email, body.token);
+    return { data };
+  }
+
+  /**
+   * POST /api/auth/demo-login
+   * Dev-only email+password shortcut for the fixed demo account
+   * (demo@letico.com / demo123). Disabled in production.
+   */
+  @Post('demo-login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async demoLogin(@Body() body: DemoLoginDto) {
+    const data = await this.authService.demoLogin(body.email, body.password);
     return { data };
   }
 
@@ -70,10 +88,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   async migrateGuest(
-    @Body() body: { guestToken: string },
+    @Body() body: MigrateGuestDto,
     @CurrentUser() user: { id: string },
   ) {
-    const data = await this.authService.migrateGuest(user.id, body.guestToken ?? '');
+    const data = await this.authService.migrateGuest(user.id, body.guestToken);
     return { data };
   }
 }

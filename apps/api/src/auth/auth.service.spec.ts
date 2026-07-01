@@ -9,6 +9,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -231,6 +232,103 @@ describe('AuthService.verifyOtp', () => {
     const service = await createService(mockClient);
 
     await expect(service.verifyOtp('u@e.com', '123456')).rejects.toThrow(UnauthorizedException);
+  });
+});
+
+// ── demoLogin ────────────────────────────────────────────────────────────
+
+describe('AuthService.demoLogin', () => {
+  const DEMO_EMAIL = 'demo@letico.com';
+  const DEMO_PASSWORD = 'demo123';
+
+  function buildDemoClient(opts: {
+    signInResults: Array<{ data: unknown; error: unknown }>;
+    createUserError?: { message: string; code?: string } | null;
+  }) {
+    let signInCallCount = 0;
+    const upsertChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
+    return {
+      from: jest.fn().mockReturnValue(upsertChain),
+      auth: {
+        signInWithPassword: jest.fn().mockImplementation(() => {
+          const result = opts.signInResults[signInCallCount] ?? opts.signInResults[opts.signInResults.length - 1];
+          signInCallCount++;
+          return Promise.resolve(result);
+        }),
+        admin: {
+          createUser: jest.fn().mockResolvedValue({ error: opts.createUserError ?? null }),
+        },
+      },
+    };
+  }
+
+  const originalNodeEnv = process.env['NODE_ENV'];
+
+  afterEach(() => {
+    process.env['NODE_ENV'] = originalNodeEnv;
+  });
+
+  it('throws ForbiddenException when NODE_ENV is production', async () => {
+    process.env['NODE_ENV'] = 'production';
+    const mockClient = buildDemoClient({ signInResults: [{ data: {}, error: null }] });
+    const service = await createService(mockClient);
+
+    await expect(service.demoLogin(DEMO_EMAIL, DEMO_PASSWORD)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('throws UnauthorizedException for the wrong password', async () => {
+    process.env['NODE_ENV'] = 'test';
+    const mockClient = buildDemoClient({ signInResults: [{ data: {}, error: null }] });
+    const service = await createService(mockClient);
+
+    await expect(service.demoLogin(DEMO_EMAIL, 'wrong-password')).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('signs in directly when the demo user already exists', async () => {
+    process.env['NODE_ENV'] = 'test';
+    const mockClient = buildDemoClient({
+      signInResults: [
+        {
+          data: {
+            session: { access_token: 'acc-tok', refresh_token: 'ref-tok' },
+            user: { id: USER_ID, email: DEMO_EMAIL },
+          },
+          error: null,
+        },
+      ],
+    });
+    const service = await createService(mockClient);
+
+    const result = await service.demoLogin(DEMO_EMAIL, DEMO_PASSWORD);
+
+    expect(result.accessToken).toBe('acc-tok');
+    expect(mockClient.auth.admin.createUser).not.toHaveBeenCalled();
+  });
+
+  it('creates the demo user on first use, then signs in', async () => {
+    process.env['NODE_ENV'] = 'test';
+    const mockClient = buildDemoClient({
+      signInResults: [
+        { data: { session: null, user: null }, error: { message: 'invalid credentials' } },
+        {
+          data: {
+            session: { access_token: 'acc-tok', refresh_token: 'ref-tok' },
+            user: { id: USER_ID, email: DEMO_EMAIL },
+          },
+          error: null,
+        },
+      ],
+    });
+    const service = await createService(mockClient);
+
+    const result = await service.demoLogin(DEMO_EMAIL, DEMO_PASSWORD);
+
+    expect(mockClient.auth.admin.createUser).toHaveBeenCalledWith({
+      email: DEMO_EMAIL,
+      password: DEMO_PASSWORD,
+      email_confirm: true,
+    });
+    expect(result.accessToken).toBe('acc-tok');
   });
 });
 
