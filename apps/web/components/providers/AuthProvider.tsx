@@ -15,19 +15,23 @@ import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 interface AuthContextValue {
   auth: AuthContext | null;
   isProvisioning: boolean;
+  error: string | null;
+  retry: () => void;
 }
 
 const AuthCtx = createContext<AuthContextValue>({
   auth: null,
   isProvisioning: false,
+  error: null,
+  retry: () => {},
 });
 
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const { auth, isProvisioning } = useAuth();
+  const { auth, isProvisioning, error, retry } = useAuth();
   // Realtime subscription starts automatically on sign-in; no-ops for guests
   useRealtimeSync(auth);
   return (
-    <AuthCtx.Provider value={{ auth, isProvisioning }}>{children}</AuthCtx.Provider>
+    <AuthCtx.Provider value={{ auth, isProvisioning, error, retry }}>{children}</AuthCtx.Provider>
   );
 }
 

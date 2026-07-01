@@ -6,7 +6,7 @@
  * Tests verify: correct DB call arguments, correct DTO mapping, error cases.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { BibleService } from './bible.service';
 import { SupabaseProvider } from '../supabase/supabase.provider';
 
@@ -115,7 +115,7 @@ describe('BibleService', () => {
       }).compile();
       service = module.get<BibleService>(BibleService);
 
-      await expect(service.getAllBooks()).rejects.toThrow('Failed to fetch books');
+      await expect(service.getAllBooks()).rejects.toThrow(InternalServerErrorException);
     });
   });
 

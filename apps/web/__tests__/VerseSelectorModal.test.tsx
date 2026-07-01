@@ -44,6 +44,25 @@ describe('VerseSelectorModal', () => {
     expect(baseProps.onClose).not.toHaveBeenCalled();
   });
 
+  it('tapping a verse bubble selects that single verse', () => {
+    render(<VerseSelectorModal {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^verse 5/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'save selection' }));
+
+    expect(baseProps.onSaveRange).toHaveBeenCalledWith(5, 5);
+  });
+
+  it('shift-tapping a second verse bubble extends the selection into a range', () => {
+    render(<VerseSelectorModal {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^verse 5/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^verse 9/ }), { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'save selection' }));
+
+    expect(baseProps.onSaveRange).toHaveBeenCalledWith(5, 9);
+  });
+
   it('keeps the dialog mounted through the exit transition and then notifies onExited', () => {
     const { rerender } = render(<VerseSelectorModal {...baseProps} />);
 

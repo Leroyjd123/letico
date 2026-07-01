@@ -6,9 +6,11 @@
  * Phase 5: OTP send/verify, guest migration.
  */
 import {
+  ForbiddenException,
   Injectable,
   ConflictException,
   BadRequestException,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
@@ -16,8 +18,15 @@ import { SupabaseProvider } from '../supabase/supabase.provider';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Dev-only demo account — never usable when NODE_ENV === 'production'.
+// Exists purely so the app can be smoke-tested without a real inbox for OTP.
+const DEMO_EMAIL = 'demo@letico.com';
+const DEMO_PASSWORD = 'demo123';
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(@InjectSupabase() private readonly supabase: SupabaseProvider) {}
 
   // ── GET /auth/me ──────────────────────────────────────────────────────────
@@ -159,6 +168,76 @@ export class AuthService {
       { id, email: userEmail ?? email },
       { onConflict: 'id' },
     );
+
+    return {
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      user: { id, email: userEmail ?? email },
+    };
+  }
+
+  // ── POST /auth/demo-login ─────────────────────────────────────────────────
+
+  /**
+   * Dev-only email+password shortcut for the fixed demo account. Disabled
+   * whenever NODE_ENV === 'production'. Creates the demo Supabase Auth user
+   * on first use (via admin API), then signs in with password on every call.
+   */
+  async demoLogin(
+    email: string,
+    password: string,
+  ): Promise<{ accessToken: string; refreshToken: string; user: { id: string; email: string } }> {
+    if (process.env['NODE_ENV'] === 'production') {
+      throw new ForbiddenException({
+        error: { code: 'DEMO_LOGIN_DISABLED', message: 'Demo login is not available in production' },
+      });
+    }
+
+    if (email !== DEMO_EMAIL || password !== DEMO_PASSWORD) {
+      throw new UnauthorizedException({
+        error: { code: 'INVALID_DEMO_CREDENTIALS', message: 'Invalid demo credentials' },
+      });
+    }
+
+    const db = this.supabase.getClient();
+
+    let signInResult = await db.auth.signInWithPassword({ email, password });
+
+    if (signInResult.error) {
+      // First use — create the demo Supabase Auth user, then sign in.
+      const { error: createError } = await db.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+      if (createError && createError.code !== 'email_exists') {
+        this.logger.error(`Failed to create demo user: ${createError.message}`);
+        throw new UnauthorizedException({
+          error: { code: 'DEMO_LOGIN_FAILED', message: 'Could not create demo account' },
+        });
+      }
+
+      signInResult = await db.auth.signInWithPassword({ email, password });
+    }
+
+    if (signInResult.error || !signInResult.data.session || !signInResult.data.user) {
+      throw new UnauthorizedException({
+        error: { code: 'DEMO_LOGIN_FAILED', message: 'Demo login failed' },
+      });
+    }
+
+    const { id, email: userEmail } = signInResult.data.user;
+    const { access_token, refresh_token } = signInResult.data.session;
+
+    const { error: upsertError } = await db.from('users').upsert(
+      { id, email: userEmail ?? email },
+      { onConflict: 'id' },
+    );
+
+    if (upsertError) {
+      this.logger.error(`Failed to upsert demo user ${id}: ${upsertError.message}`);
+    }
 
     return {
       accessToken: access_token,

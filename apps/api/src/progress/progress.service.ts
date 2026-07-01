@@ -8,7 +8,7 @@
  * to .insert() without this protection is a P0 bug — it would throw a
  * unique constraint violation if the user re-reads a verse.
  */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
 import type {
@@ -24,6 +24,8 @@ const TOTAL_BIBLE_VERSES = 31102;
 
 @Injectable()
 export class ProgressService {
+  private readonly logger = new Logger(ProgressService.name);
+
   constructor(@InjectSupabase() private readonly supabase: SupabaseProvider) {}
 
   /**
@@ -52,7 +54,10 @@ export class ProgressService {
       .select('verse_id');
 
     if (error) {
-      throw new Error(`Failed to mark verses read: ${error.message}`);
+      this.logger.error(`Failed to mark verses read for ${userId}: ${error.message}`);
+      throw new InternalServerErrorException({
+        error: { code: 'MARK_READ_FAILED', message: 'Failed to mark verses read' },
+      });
     }
 
     const inserted = (data ?? []).length;

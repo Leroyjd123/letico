@@ -74,7 +74,7 @@ function authKey(auth: AuthContext | null): string {
 const NUDGE_CHAPTER_THRESHOLD = 10;
 
 export function ReadPageClient() {
-  const { auth, isProvisioning } = useAuthContext();
+  const { auth, isProvisioning, error: authError, retry: retryAuth } = useAuthContext();
   const { hasPermanentFailure } = useOfflineQueue(auth);
   const { markChapter, markDayComplete } = useVerseRead(auth);
   const continuePosition = useContinueReading(auth);
@@ -254,8 +254,26 @@ export function ReadPageClient() {
             textTransform: 'lowercase',
           }}
         >
-          {isProvisioning ? 'setting up your reading…' : 'loading…'}
+          {authError ?? (isProvisioning ? 'setting up your reading…' : 'loading…')}
         </p>
+        {authError && (
+          <button
+            type="button"
+            onClick={retryAuth}
+            style={{
+              marginTop: 'var(--space-4)',
+              fontFamily: 'var(--font-headline)',
+              fontSize: '0.875rem',
+              color: 'var(--color-primary)',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textTransform: 'lowercase',
+            }}
+          >
+            try again
+          </button>
+        )}
       </div>
     );
   }

@@ -7,13 +7,15 @@
  * Invariant: global_order is never returned to the client. Every query that
  * fetches verses must route through toVerseDto() to strip it.
  */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
 import type { BookRow, ChapterRow, VerseRow, BookDto, ChapterDto, VerseDto } from './bible.types';
 
 @Injectable()
 export class BibleService {
+  private readonly logger = new Logger(BibleService.name);
+
   constructor(@InjectSupabase() private readonly supabase: SupabaseProvider) {}
 
   async getAllBooks(): Promise<BookDto[]> {
@@ -23,8 +25,11 @@ export class BibleService {
       .select('id, usfm_code, name, testament, chapter_count, sort_order')
       .order('sort_order', { ascending: true });
 
-    if (error) {
-      throw new Error(`Failed to fetch books: ${error.message}`);
+    if (error || !data) {
+      this.logger.error(`Failed to fetch books: ${error?.message}`);
+      throw new InternalServerErrorException({
+        error: { code: 'BOOKS_FETCH_FAILED', message: 'Failed to fetch books' },
+      });
     }
 
     return (data as BookRow[]).map(this.toBookDto);
@@ -66,8 +71,11 @@ export class BibleService {
       .eq('book_id', book.id)
       .order('number', { ascending: true });
 
-    if (error) {
-      throw new Error(`Failed to fetch chapters for ${normalised}: ${error.message}`);
+    if (error || !data) {
+      this.logger.error(`Failed to fetch chapters for ${normalised}: ${error?.message}`);
+      throw new InternalServerErrorException({
+        error: { code: 'CHAPTERS_FETCH_FAILED', message: 'Failed to fetch chapters' },
+      });
     }
 
     return (data as ChapterRow[]).map(this.toChapterDto);
@@ -101,7 +109,10 @@ export class BibleService {
       .order('number', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch verses for chapter ${chapterId}: ${error.message}`);
+      this.logger.error(`Failed to fetch verses for chapter ${chapterId}: ${error.message}`);
+      throw new InternalServerErrorException({
+        error: { code: 'VERSES_FETCH_FAILED', message: 'Failed to fetch verses' },
+      });
     }
 
     if (!data || (data as VerseRow[]).length === 0) {

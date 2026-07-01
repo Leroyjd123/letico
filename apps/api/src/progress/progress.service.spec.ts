@@ -6,6 +6,7 @@
  * alreadyRead counting, and empty-verseIds edge case.
  */
 import { Test, TestingModule } from '@nestjs/testing';
+import { InternalServerErrorException } from '@nestjs/common';
 import { ProgressService } from './progress.service';
 import { SupabaseProvider } from '../supabase/supabase.provider';
 
@@ -102,7 +103,7 @@ describe('ProgressService', () => {
       const mockClient = { from: jest.fn().mockReturnValue(upsertChain) };
       await createService(mockClient);
 
-      await expect(service.markVersesRead(USER_ID, [1])).rejects.toThrow('Failed to mark verses read');
+      await expect(service.markVersesRead(USER_ID, [1])).rejects.toThrow(InternalServerErrorException);
     });
 
     it('returns inserted = 0, alreadyRead = 0 when no data returned (edge case)', async () => {
