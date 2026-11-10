@@ -10,6 +10,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
+import { dbError } from '../common/db-errors';
 import type { BookRow, ChapterRow, VerseRow, BookDto, ChapterDto, VerseDto } from './bible.types';
 
 @Injectable()
@@ -24,7 +25,7 @@ export class BibleService {
       .order('sort_order', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch books: ${error.message}`);
+      dbError('BIBLE_LOOKUP_FAILED', error);
     }
 
     return (data as BookRow[]).map(this.toBookDto);
@@ -67,7 +68,7 @@ export class BibleService {
       .order('number', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch chapters for ${normalised}: ${error.message}`);
+      dbError('BIBLE_LOOKUP_FAILED', error);
     }
 
     return (data as ChapterRow[]).map(this.toChapterDto);
@@ -101,7 +102,7 @@ export class BibleService {
       .order('number', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to fetch verses for chapter ${chapterId}: ${error.message}`);
+      dbError('BIBLE_LOOKUP_FAILED', error);
     }
 
     if (!data || (data as VerseRow[]).length === 0) {

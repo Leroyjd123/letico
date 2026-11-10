@@ -6,7 +6,7 @@
  * Tests verify: correct DB call arguments, correct DTO mapping, error cases.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { BibleService } from './bible.service';
 import { SupabaseProvider } from '../supabase/supabase.provider';
 
@@ -104,7 +104,7 @@ describe('BibleService', () => {
       expect(mockSupabase._chain.order).toHaveBeenCalledWith('sort_order', { ascending: true });
     });
 
-    it('throws with "Failed to fetch books" on DB error', async () => {
+    it('throws a typed 500 on DB error', async () => {
       mockSupabase = buildMockDb(null, { message: 'connection refused' });
       mockSupabase._chain.order.mockResolvedValue({ data: null, error: { message: 'connection refused' } });
       const module = await Test.createTestingModule({
@@ -115,7 +115,7 @@ describe('BibleService', () => {
       }).compile();
       service = module.get<BibleService>(BibleService);
 
-      await expect(service.getAllBooks()).rejects.toThrow('Failed to fetch books');
+      await expect(service.getAllBooks()).rejects.toThrow(InternalServerErrorException);
     });
   });
 

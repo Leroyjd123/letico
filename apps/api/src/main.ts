@@ -12,11 +12,17 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Behind a reverse proxy / load balancer, rate limiting must key on the real
+  // client IP. Set TRUST_PROXY to the number of proxy hops (e.g. 1).
+  const trustProxy = parseInt(process.env['TRUST_PROXY'] ?? '0', 10);
+  if (trustProxy > 0) app.set('trust proxy', trustProxy);
 
   // All routes prefixed with /api
   app.setGlobalPrefix('api');
@@ -39,6 +45,7 @@ async function bootstrap() {
       'Content-Type',
       'Authorization',
       'X-Guest-Token',
+      'X-Timezone',
     ],
   });
 

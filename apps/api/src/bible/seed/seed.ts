@@ -10,7 +10,7 @@
  *    NOTE: verse text is seeded as a placeholder. Real KJV text must be
  *    loaded from a full KJV JSON source file (not included in this repo
  *    due to copyright). The placeholder format is "Book Chapter:Verse".
- * 4. Inserts 3 plans (1yr, 2yr, chronological)
+ * 4. Inserts the 1yr plan (reused if it already exists — safe to re-run)
  * 5. Inserts 365 plan_days for the 1yr plan — boundaries aligned to chapter ends
  * 6. Asserts verse count = 31,102 and global_order has no gaps
  */
@@ -156,22 +156,31 @@ async function main() {
   // ── Step 4: Plans ─────────────────────────────────────────
   console.log('\nSeeding plans...');
 
-  const planRows = [
-    { name: '1 year plan', description: 'sequential, Genesis to Revelation, 365 days' },
-    { name: '2 year plan', description: 'sequential, Genesis to Revelation, 730 days' },
-    { name: 'chronological', description: 'Bible events in historical order' },
-  ];
+  // Only plans that have generated days are seeded. (The 2-year and
+  // chronological plans used to be inserted with no days at all, which broke
+  // the read screen for anyone who picked them.) Re-running the seed reuses
+  // the existing plan instead of inserting a duplicate.
+  const ONE_YEAR = { name: '1 year plan', description: 'sequential, Genesis to Revelation, 365 days' };
 
-  const { data: insertedPlans, error: plansError } = await db
+  const { data: existingPlans, error: existingError } = await db
     .from('plans')
-    .insert(planRows)
-    .select('id, name');
+    .select('id, name')
+    .eq('name', ONE_YEAR.name)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (existingError) throw new Error(`Plans lookup failed: ${existingError.message}`);
 
-  if (plansError) throw new Error(`Plans insert failed: ${plansError.message}`);
-  console.log(`  ✓ ${insertedPlans?.length ?? 0} plans`);
-
-  const oneYearPlan = (insertedPlans ?? []).find((p) => p.name === '1 year plan');
-  if (!oneYearPlan) throw new Error('1 year plan not found after insert');
+  let oneYearPlan = existingPlans?.[0] as { id: string; name: string } | undefined;
+  if (!oneYearPlan) {
+    // is_default exists once migration 002 has run; fall back for older schemas.
+    let insert = await db.from('plans').insert({ ...ONE_YEAR, is_default: true }).select('id, name').single();
+    if (insert.error && /is_default/.test(insert.error.message)) {
+      insert = await db.from('plans').insert(ONE_YEAR).select('id, name').single();
+    }
+    if (insert.error || !insert.data) throw new Error(`Plans insert failed: ${insert.error?.message}`);
+    oneYearPlan = insert.data as { id: string; name: string };
+  }
+  console.log(`  ✓ plan "${oneYearPlan.name}" (${oneYearPlan.id})`);
 
   // ── Step 5: plan_days for 1yr plan ────────────────────────
   console.log('\nGenerating 1yr plan days...');
@@ -216,7 +225,7 @@ async function main() {
     const chunk = planDaysResolved.slice(offset, offset + 50);
     const { error: pdError } = await db
       .from('plan_days')
-      .insert(chunk);
+      .upsert(chunk, { onConflict: 'plan_id,day_number' });
     if (pdError) throw new Error(`plan_days insert failed at day ${(offset + 1).toString()}: ${pdError.message}`);
   }
 

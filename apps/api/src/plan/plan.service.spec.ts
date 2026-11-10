@@ -1,318 +1,132 @@
-/**
- * plan.service.spec.ts
- *
- * Tests for PlanService.
- * DB is always mocked. Tests verify UTC date arithmetic, label generation,
- * offset computation, and NotFoundException on missing days.
- */
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { PlanService } from './plan.service';
 import { SupabaseProvider } from '../supabase/supabase.provider';
+import { buildPassageLabel } from '../common/user-plan';
+import { mockSupabase, mockProvider, type MockResult, type RecordedQuery } from '../testing/mock-supabase';
 
-/** Returns a mock for the Supabase fluent chain that resolves with given data */
-function makeSingleMock(data: unknown, error: unknown = null) {
-  return {
-    select: jest.fn().mockReturnThis(),
-    eq: jest.fn().mockReturnThis(),
-    is: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockReturnThis(),
-    single: jest.fn().mockResolvedValue({ data, error }),
+const USER = 'user-1';
+const PLAN = 'plan-1';
+
+async function build(opts: {
+  from?: (q: RecordedQuery) => MockResult;
+  rpc?: Record<string, (a: Record<string, unknown>) => MockResult>;
+}) {
+  const db = mockSupabase(opts);
+  const mod = await Test.createTestingModule({
+    providers: [PlanService, { provide: SupabaseProvider, useValue: mockProvider(db.client) }],
+  }).compile();
+  return { service: mod.get(PlanService), db };
+}
+
+const DAY_ROW = {
+  id: 'd', plan_id: PLAN, day_number: 3, start_verse_id: 6, end_verse_id: 11,
+  start_global_order: 6, end_global_order: 11,
+};
+const CHAPTERS = [
+  { chapter_id: 3, chapter_number: 34, book_usfm: 'DEU', book_name: 'Deuteronomy',
+    verse_ids: [6, 7, 8, 9], verse_numbers: [1, 2, 3, 4], read_verse_ids: [6] },
+  { chapter_id: 4, chapter_number: 1, book_usfm: 'MAT', book_name: 'Matthew',
+    verse_ids: [10, 11], verse_numbers: [1, 2], read_verse_ids: [] },
+];
+
+function tables(startDate: string | null, dayRow: unknown = DAY_ROW) {
+  return (q: RecordedQuery): MockResult => {
+    if (q.table === 'users') return { data: { plan_id: PLAN, plan_start_date: startDate } };
+    if (q.table === 'plan_days') return q.has('maybeSingle') ? { data: dayRow } : { count: 365 };
+    return {};
   };
 }
 
-const FAKE_PLAN_ID = 'plan-uuid-123';
-const FAKE_USER_ID = 'user-uuid-456';
+describe('buildPassageLabel', () => {
+  const gen = { bookName: 'Genesis', bookUsfm: 'GEN' };
+  it('single chapter', () => expect(buildPassageLabel({ ...gen, chapter: 1 }, { ...gen, chapter: 1 })).toBe('genesis 1'));
+  it('chapter range', () => expect(buildPassageLabel({ ...gen, chapter: 1 }, { ...gen, chapter: 3 })).toBe('genesis 1–3'));
+  it('across books', () =>
+    expect(buildPassageLabel({ ...gen, chapter: 50 }, { bookName: 'Exodus', bookUsfm: 'EXO', chapter: 2 })).toBe(
+      'genesis 50 · exodus 2',
+    ));
+});
 
-const fakePlanDayRow = {
-  id: 'day-uuid-001',
-  plan_id: FAKE_PLAN_ID,
-  day_number: 1,
-  start_verse_id: 1,
-  end_verse_id: 31,
-  start_global_order: 1,
-  end_global_order: 31,
-};
+describe('PlanService.getPlanDay', () => {
+  it('returns every chapter of the day, across the book boundary, with read state', async () => {
+    const { service } = await build({ from: tables(null), rpc: { plan_day_chapters: () => ({ data: CHAPTERS }) } });
+    const day = await service.getPlanDay(PLAN, 3, USER, 'UTC');
+    expect(day.label).toBe('deuteronomy 34 · matthew 1');
+    expect(day.chapters.map((c) => `${c.book} ${c.chapterNumber}`)).toEqual(['DEU 34', 'MAT 1']);
+    expect(day.chapters[0]!.readVerseIds).toEqual([6]);
+    expect(day.totalVerses).toBe(6);
+    expect(day.versesRead).toBe(1);
+    expect(day.startVerse).toBe(1);
+    expect(day.endVerse).toBe(2);
+    expect(day.totalDays).toBe(365);
+    expect(day.offsetFromToday).toBe(2); // no start date → today is day 1
+  });
 
-const fakeVerseWithContext = {
-  number: 1,
-  chapters: {
-    number: 1,
-    books: { name: 'Genesis', usfm_code: 'GEN' },
-  },
-};
+  it('throws PLAN_DAY_NOT_FOUND for a missing day', async () => {
+    const { service } = await build({ from: tables(null, null), rpc: {} });
+    await expect(service.getPlanDay(PLAN, 999, USER, 'UTC')).rejects.toThrow(NotFoundException);
+  });
+});
 
-const fakeEndVerseWithContext = {
-  number: 31,
-  chapters: {
-    number: 1,
-    books: { name: 'Genesis', usfm_code: 'GEN' },
-  },
-};
-
-describe('PlanService', () => {
-  let service: PlanService;
-  let callCount: number;
-
-  function buildMockClient(
-    userRow: unknown,
-    planRow: unknown,
-    planDayRow: unknown,
-    startVerseData: unknown,
-    endVerseData: unknown,
-  ) {
-    callCount = 0;
-    let versesCallCount = 0;
-    return {
-      from: jest.fn().mockImplementation((table: string) => {
-        callCount++;
-        if (table === 'users') return makeSingleMock(userRow);
-        if (table === 'plans') return makeSingleMock(planRow);
-        if (table === 'plan_days') return makeSingleMock(planDayRow);
-        if (table === 'verses') {
-          versesCallCount++;
-          // First verses call = start verse context, second = end verse context
-          const vData = versesCallCount === 1 ? startVerseData : endVerseData;
-          return makeSingleMock(vData);
+describe('PlanService.getPlanToday', () => {
+  it('uses the reader time zone to pick today', async () => {
+    const dayRequested: unknown[] = [];
+    const { service } = await build({
+      from: (q) => {
+        if (q.table === 'plan_days' && q.has('maybeSingle')) {
+          dayRequested.push(q.calls.filter((c) => c.method === 'eq').find((c) => c.args[0] === 'day_number')?.args[1]);
         }
-        return makeSingleMock(null, { message: 'unexpected table' });
-      }),
-    };
-  }
-
-  async function createService(mockClient: unknown) {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        PlanService,
-        {
-          provide: SupabaseProvider,
-          useValue: { getClient: () => mockClient },
-        },
-      ],
-    }).compile();
-    service = module.get<PlanService>(PlanService);
-  }
-
-  describe('getPlanToday', () => {
-    it('returns day 1 when plan_start_date is null', async () => {
-      const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: null };
-      const mockClient = buildMockClient(
-        userRow, null, fakePlanDayRow, fakeVerseWithContext, fakeEndVerseWithContext,
-      );
-      await createService(mockClient);
-
-      const result = await service.getPlanToday(FAKE_USER_ID);
-
-      expect(result.dayNumber).toBe(1);
-      expect(result.isToday).toBe(true);
-      expect(result.offsetFromToday).toBe(0);
+        return tables(
+          new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Kiritimati' }).format(new Date()),
+          { ...DAY_ROW, day_number: 1 },
+        )(q);
+      },
+      rpc: { plan_day_chapters: () => ({ data: CHAPTERS }) },
     });
-
-    it('computes correct day number from plan_start_date', async () => {
-      // Set start date to 4 days ago → today should be day 5
-      const fourDaysAgo = new Date();
-      fourDaysAgo.setUTCDate(fourDaysAgo.getUTCDate() - 4);
-      const startDateStr = fourDaysAgo.toISOString().slice(0, 10);
-
-      const planDayRow5 = { ...fakePlanDayRow, day_number: 5 };
-      const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: startDateStr };
-      const mockClient = buildMockClient(
-        userRow, null, planDayRow5, fakeVerseWithContext, fakeEndVerseWithContext,
-      );
-      await createService(mockClient);
-
-      const result = await service.getPlanToday(FAKE_USER_ID);
-
-      expect(result.dayNumber).toBe(5);
-      expect(result.isToday).toBe(true);
-      expect(result.offsetFromToday).toBe(0);
-    });
-
-    it('defaults to 1yr plan when user has no plan_id', async () => {
-      const userRow = { id: FAKE_USER_ID, plan_id: null, plan_start_date: null };
-      const defaultPlan = { id: FAKE_PLAN_ID };
-      const mockClient = buildMockClient(
-        userRow, defaultPlan, fakePlanDayRow, fakeVerseWithContext, fakeEndVerseWithContext,
-      );
-      await createService(mockClient);
-
-      const result = await service.getPlanToday(FAKE_USER_ID);
-      expect(result.dayNumber).toBe(1);
-    });
+    // Start date = today in UTC+14 → day 1 there.
+    const day = await service.getPlanToday(USER, 'Pacific/Kiritimati');
+    expect(dayRequested).toEqual([1]);
+    expect(day.isToday).toBe(true);
   });
+});
 
-  describe('getPlanDay', () => {
-    it('returns the requested day with correct offsetFromToday', async () => {
-      // plan_start_date = today → day 1 is today → day 3 offset = +2
-      const today = new Date().toISOString().slice(0, 10);
-      const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: today };
-      const planDayRow3 = { ...fakePlanDayRow, day_number: 3 };
-      const mockClient = buildMockClient(
-        userRow, null, planDayRow3, fakeVerseWithContext, fakeEndVerseWithContext,
-      );
-      await createService(mockClient);
-
-      const result = await service.getPlanDay(FAKE_PLAN_ID, 3, FAKE_USER_ID);
-
-      expect(result.dayNumber).toBe(3);
-      expect(result.offsetFromToday).toBe(2);
-      expect(result.isToday).toBe(false);
-    });
-
-    it('throws NotFoundException with PLAN_DAY_NOT_FOUND when day does not exist', async () => {
-      const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: null };
-      const mockClient = buildMockClient(
-        userRow, null, null, null, null,
-      );
-      // Override plan_days to return error
-      const originalFrom = mockClient.from;
-      mockClient.from = jest.fn().mockImplementation((table: string) => {
-        if (table === 'plan_days') return makeSingleMock(null, { message: 'not found' });
-        return originalFrom(table);
-      });
-      await createService(mockClient);
-
-      await expect(service.getPlanDay(FAKE_PLAN_ID, 999, FAKE_USER_ID)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-  });
-
-  describe('listPlans', () => {
-    /**
-     * listPlans() does two DB operations:
-     *   1. from('plans').select('id, name')           → array result (no .single())
-     *   2. from('plan_days').select(...).eq().order().limit().single() → one call per plan
-     *
-     * We need a separate mock builder because the plans query resolves without .single().
-     */
-    function buildListPlansMockClient(
-      plansData: Array<{ id: string; name: string }> | null,
-      plansError: unknown = null,
-      dayCountByPlanId: Record<string, number | null> = {},
-    ) {
-      return {
-        from: jest.fn().mockImplementation((table: string) => {
-          if (table === 'plans') {
-            return {
-              select: jest.fn().mockResolvedValue({ data: plansData, error: plansError }),
-            };
-          }
-          if (table === 'plan_days') {
-            let capturedPlanId: string | null = null;
-            const chain: Record<string, jest.Mock> = {
-              select: jest.fn().mockImplementation(() => chain),
-              eq: jest.fn().mockImplementation((_col: string, val: string) => {
-                capturedPlanId = val;
-                return chain;
-              }),
-              order: jest.fn().mockImplementation(() => chain),
-              limit: jest.fn().mockImplementation(() => chain),
-              single: jest.fn().mockImplementation(() => {
-                const dayNumber =
-                  capturedPlanId !== null ? (dayCountByPlanId[capturedPlanId] ?? null) : null;
-                const data = dayNumber !== null ? { day_number: dayNumber } : null;
-                return Promise.resolve({ data, error: null });
-              }),
-            };
-            return chain;
-          }
-          return {
-            select: jest.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'unexpected table' },
-            }),
-          };
+describe('PlanService.getAllDaysSummary', () => {
+  it('builds the whole plan from ONE SQL call', async () => {
+    const { service, db } = await build({
+      from: tables(null),
+      rpc: {
+        plan_days_summary: () => ({
+          data: [
+            { day_number: 1, total_verses: 31, verses_read: 31, start_book_name: 'Genesis', start_book_usfm: 'GEN',
+              start_chapter: 1, end_book_name: 'Genesis', end_book_usfm: 'GEN', end_chapter: 1 },
+            { day_number: 2, total_verses: 50, verses_read: 25, start_book_name: 'Genesis', start_book_usfm: 'GEN',
+              start_chapter: 2, end_book_name: 'Genesis', end_book_usfm: 'GEN', end_chapter: 3 },
+          ],
         }),
-      };
-    }
-
-    it('returns empty array when DB returns an error on the plans query', async () => {
-      const mockClient = buildListPlansMockClient(null, { message: 'db error' });
-      await createService(mockClient);
-
-      const result = await service.listPlans();
-      expect(result).toEqual([]);
+      },
     });
-
-    it('returns empty array when plansData is null', async () => {
-      const mockClient = buildListPlansMockClient(null, null);
-      await createService(mockClient);
-
-      const result = await service.listPlans();
-      expect(result).toEqual([]);
-    });
-
-    it('returns empty array when no plans exist', async () => {
-      const mockClient = buildListPlansMockClient([], null);
-      await createService(mockClient);
-
-      const result = await service.listPlans();
-      expect(result).toEqual([]);
-    });
-
-    it('returns a single plan with correct totalDays', async () => {
-      const plans = [{ id: 'plan-1', name: '1 year plan' }];
-      const mockClient = buildListPlansMockClient(plans, null, { 'plan-1': 365 });
-      await createService(mockClient);
-
-      const result = await service.listPlans();
-      expect(result).toEqual([{ id: 'plan-1', name: '1 year plan', totalDays: 365 }]);
-    });
-
-    it('returns multiple plans with correct totalDays each', async () => {
-      const plans = [
-        { id: 'plan-a', name: '1 year plan' },
-        { id: 'plan-b', name: '6 month plan' },
-      ];
-      const mockClient = buildListPlansMockClient(plans, null, {
-        'plan-a': 365,
-        'plan-b': 180,
-      });
-      await createService(mockClient);
-
-      const result = await service.listPlans();
-      expect(result).toHaveLength(2);
-      expect(result).toContainEqual({ id: 'plan-a', name: '1 year plan', totalDays: 365 });
-      expect(result).toContainEqual({ id: 'plan-b', name: '6 month plan', totalDays: 180 });
-    });
-
-    it('sets totalDays to 0 when plan_days has no rows for a plan', async () => {
-      const plans = [{ id: 'plan-empty', name: 'empty plan' }];
-      // dayData will be null → totalDays = 0
-      const mockClient = buildListPlansMockClient(plans, null, { 'plan-empty': null });
-      await createService(mockClient);
-
-      const result = await service.listPlans();
-      expect(result).toEqual([{ id: 'plan-empty', name: 'empty plan', totalDays: 0 }]);
-    });
+    const days = await service.getAllDaysSummary(PLAN, USER, 'UTC');
+    expect(db.rpcCalls).toHaveLength(1);
+    expect(days).toEqual([
+      { dayNumber: 1, label: 'genesis 1', completionPct: 100, isToday: true, offsetFromToday: 0 },
+      { dayNumber: 2, label: 'genesis 2–3', completionPct: 50, isToday: false, offsetFromToday: 1 },
+    ]);
   });
+});
 
-  describe('buildLabel (via getPlanToday)', () => {
-    it('produces single-chapter label when start and end are in the same chapter', async () => {
-      const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: null };
-      const mockClient = buildMockClient(
-        userRow, null, fakePlanDayRow, fakeVerseWithContext, fakeEndVerseWithContext,
-      );
-      await createService(mockClient);
-
-      const result = await service.getPlanToday(FAKE_USER_ID);
-      expect(result.label).toBe('genesis 1');
+describe('PlanService.listPlans', () => {
+  it('hides plans with no days and puts the default first', async () => {
+    const { service } = await build({
+      from: () => ({
+        data: [
+          { id: 'a', name: '2 year plan', is_default: false, plan_days: [{ count: 0 }] },
+          { id: 'b', name: 'chronological', is_default: false, plan_days: [{ count: 365 }] },
+          { id: 'c', name: '1 year plan', is_default: true, plan_days: [{ count: 365 }] },
+        ],
+      }),
     });
-
-    it('produces multi-chapter label when start and end are in different chapters', async () => {
-      const endVerseMultiChapter = {
-        number: 25,
-        chapters: { number: 3, books: { name: 'Genesis', usfm_code: 'GEN' } },
-      };
-      const userRow = { id: FAKE_USER_ID, plan_id: FAKE_PLAN_ID, plan_start_date: null };
-      const mockClient = buildMockClient(
-        userRow, null, fakePlanDayRow, fakeVerseWithContext, endVerseMultiChapter,
-      );
-      await createService(mockClient);
-
-      const result = await service.getPlanToday(FAKE_USER_ID);
-      expect(result.label).toBe('genesis 1–3');
-    });
+    const plans = await service.listPlans();
+    expect(plans.map((p) => p.id)).toEqual(['c', 'b']);
   });
 });

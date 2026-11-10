@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
+import { dbError } from '../common/db-errors';
+import { getDefaultPlanId } from '../common/user-plan';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -25,33 +27,20 @@ export class AuthService {
   /** Returns the authenticated user's profile including their planId and planStartDate. */
   async getMe(userId: string): Promise<{ id: string; planId: string | null; planStartDate: string | null }> {
     const db = this.supabase.getClient();
-
-    const { data: userRow } = await db
+    const { data: userRow, error } = await db
       .from('users')
       .select('id, plan_id, plan_start_date')
       .eq('id', userId)
       .is('archived_at', null)
-      .single();
+      .maybeSingle();
+    if (error) dbError('USER_LOOKUP_FAILED', error);
 
-    if (!userRow) {
-      return { id: userId, planId: null, planStartDate: null };
-    }
-
-    const row = userRow as { id: string; plan_id: string | null; plan_start_date: string | null };
-    let planId = row.plan_id;
-    const planStartDate = row.plan_start_date;
-
-    if (!planId) {
-      const { data: defaultPlan } = await db
-        .from('plans')
-        .select('id')
-        .eq('name', '1 year plan')
-        .limit(1)
-        .single();
-      planId = defaultPlan ? (defaultPlan as { id: string }).id : null;
-    }
-
-    return { id: userId, planId, planStartDate };
+    const row = userRow as { plan_id: string | null; plan_start_date: string | null } | null;
+    return {
+      id: userId,
+      planId: row?.plan_id ?? (await getDefaultPlanId(db)),
+      planStartDate: row?.plan_start_date ?? null,
+    };
   }
 
   // ── POST /auth/guest ──────────────────────────────────────────────────────
@@ -59,45 +48,27 @@ export class AuthService {
   /**
    * Creates a guest user row in the users table.
    * The guest_token is a UUID that the client must store in localStorage.
-   * The plan_id defaults to the 1yr plan so plan/today works immediately.
+   * plan_id defaults to the default plan so plan/today works immediately;
+   * plan_start_date stays null until the reader picks one.
    */
   async createGuest(): Promise<{ guestToken: string; createdAt: string }> {
     const db = this.supabase.getClient();
-
-    const { data: planData } = await db
-      .from('plans')
-      .select('id')
-      .eq('name', '1 year plan')
-      .limit(1)
-      .single();
-
-    const planId = planData ? (planData as { id: string }).id : null;
-
-    const guestToken = crypto.randomUUID();
-    const userId = crypto.randomUUID();
+    const planId = await getDefaultPlanId(db);
 
     const { data, error } = await db
       .from('users')
-      .insert({
-        id: userId,
-        guest_token: guestToken,
-        plan_id: planId,
-        // plan_start_date intentionally null — user sets it in Settings.
-        // computeTodayDayNumber() returns day 1 when start date is null.
-      })
+      .insert({ id: crypto.randomUUID(), guest_token: crypto.randomUUID(), plan_id: planId })
       .select('guest_token, created_at')
       .single();
 
-    if (error) {
+    if (error || !data) {
       throw new ConflictException({
-        error: { code: 'GUEST_CREATE_FAILED', message: error.message },
+        error: { code: 'GUEST_CREATE_FAILED', message: error?.message ?? 'guest not created' },
       });
     }
 
-    return {
-      guestToken: (data as { guest_token: string; created_at: string }).guest_token,
-      createdAt: (data as { guest_token: string; created_at: string }).created_at,
-    };
+    const row = data as { guest_token: string; created_at: string };
+    return { guestToken: row.guest_token, createdAt: row.created_at };
   }
 
   // ── POST /auth/otp/send ───────────────────────────────────────────────────
@@ -107,13 +78,14 @@ export class AuthService {
    * Throws BadRequestException with code INVALID_EMAIL for malformed addresses.
    */
   async sendOtp(email: string): Promise<{ sent: true }> {
+    // DTO validation already checks this; kept as defence in depth.
     if (!EMAIL_REGEX.test(email)) {
       throw new BadRequestException({
         error: { code: 'INVALID_EMAIL', message: 'Invalid email format' },
       });
     }
 
-    const { error } = await this.supabase.getClient().auth.signInWithOtp({
+    const { error } = await this.supabase.createAuthClient().auth.signInWithOtp({
       email,
       options: { shouldCreateUser: true },
     });
@@ -138,7 +110,7 @@ export class AuthService {
     email: string,
     token: string,
   ): Promise<{ accessToken: string; refreshToken: string; user: { id: string; email: string } }> {
-    const { data, error } = await this.supabase.getClient().auth.verifyOtp({
+    const { data, error } = await this.supabase.createAuthClient().auth.verifyOtp({
       email,
       token,
       type: 'email',
@@ -154,11 +126,11 @@ export class AuthService {
     const { access_token, refresh_token } = data.session;
 
     // Upsert users table — handles returning users on a new device gracefully
-    const db = this.supabase.getClient();
-    await db.from('users').upsert(
-      { id, email: userEmail ?? email },
-      { onConflict: 'id' },
-    );
+    const { error: upsertError } = await this.supabase
+      .getClient()
+      .from('users')
+      .upsert({ id, email: userEmail ?? email }, { onConflict: 'id' });
+    if (upsertError) dbError('USER_UPSERT_FAILED', upsertError);
 
     return {
       accessToken: access_token,
@@ -170,59 +142,25 @@ export class AuthService {
   // ── POST /auth/migrate ────────────────────────────────────────────────────
 
   /**
-   * Transfers all verse_reads from a guest user to the authenticated user.
-   * Duplicate reads (already read by the auth user) are silently skipped.
-   * Archives the guest user row after migration.
-   *
-   * Safe to call multiple times — subsequent calls return alreadyMigrated: true.
+   * Moves ALL of a guest's verse_reads (plus plan and start date, if the
+   * account has none) to the authenticated user and archives the guest —
+   * in a single transaction (migrate_guest SQL function). Duplicate reads are
+   * skipped. Safe to call repeatedly: later calls return alreadyMigrated: true.
    */
   async migrateGuest(
     authenticatedUserId: string,
     guestToken: string,
   ): Promise<{ migratedReads: number; alreadyMigrated: boolean }> {
-    const db = this.supabase.getClient();
+    const { data, error } = await this.supabase.getClient().rpc('migrate_guest', {
+      p_guest_token: guestToken,
+      p_user_id: authenticatedUserId,
+    });
+    if (error) dbError('MIGRATION_FAILED', error);
 
-    // Locate the guest user (must not be already archived)
-    const { data: guestUser } = await db
-      .from('users')
-      .select('id')
-      .eq('guest_token', guestToken)
-      .is('archived_at', null)
-      .single();
-
-    if (!guestUser) {
-      // Already migrated or token never existed — treat as idempotent success
-      return { migratedReads: 0, alreadyMigrated: true };
-    }
-
-    const guestUserId = (guestUser as { id: string }).id;
-
-    // Fetch all verse_reads belonging to the guest
-    const { data: guestReads } = await db
-      .from('verse_reads')
-      .select('verse_id, read_at')
-      .eq('user_id', guestUserId);
-
-    const reads = (guestReads ?? []) as Array<{ verse_id: number; read_at: string }>;
-
-    // Transfer reads — ignoreDuplicates handles the overlap case (DISCUSSION-004)
-    if (reads.length > 0) {
-      await db.from('verse_reads').upsert(
-        reads.map((r) => ({
-          user_id: authenticatedUserId,
-          verse_id: r.verse_id,
-          read_at: r.read_at,
-        })),
-        { onConflict: 'user_id,verse_id', ignoreDuplicates: true },
-      );
-    }
-
-    // Soft-delete the guest user row
-    await db
-      .from('users')
-      .update({ archived_at: new Date().toISOString(), guest_token: null })
-      .eq('id', guestUserId);
-
-    return { migratedReads: reads.length, alreadyMigrated: false };
+    const row = ((data ?? []) as Array<{ migrated_reads: number; already_migrated: boolean }>)[0];
+    return {
+      migratedReads: row?.migrated_reads ?? 0,
+      alreadyMigrated: row?.already_migrated ?? true,
+    };
   }
 }

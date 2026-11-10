@@ -14,6 +14,8 @@ export const SUPABASE_CLIENT = Symbol('SUPABASE_CLIENT');
 @Injectable()
 export class SupabaseProvider {
   private readonly client: SupabaseClient;
+  private readonly url: string;
+  private readonly key: string;
 
   constructor() {
     const url = process.env['SUPABASE_URL'];
@@ -25,6 +27,8 @@ export class SupabaseProvider {
       );
     }
 
+    this.url = url;
+    this.key = key;
     this.client = createClient(url, key, {
       auth: {
         autoRefreshToken: false,
@@ -33,7 +37,28 @@ export class SupabaseProvider {
     });
   }
 
+  /**
+   * Shared data client. NEVER call session-creating auth methods on it
+   * (signInWithOtp, verifyOtp, setSession, ...): supabase-js would store the
+   * resulting user session in memory and use that user's JWT for every later
+   * query, so the whole API would silently run as the last user who signed in.
+   */
   getClient(): SupabaseClient {
     return this.client;
+  }
+
+  /**
+   * Returns a fresh, throwaway client for auth flows that create a session
+   * (OTP send/verify). The session it stores dies with the client, so it can
+   * never leak into the shared data client or into another request.
+   */
+  createAuthClient(): SupabaseClient {
+    return createClient(this.url, this.key, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    });
   }
 }

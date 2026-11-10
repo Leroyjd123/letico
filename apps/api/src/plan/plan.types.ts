@@ -10,35 +10,67 @@ export interface PlanDayRow {
   end_global_order: number;
 }
 
-export interface UserPlanRow {
-  id: string;
-  plan_id: string | null;
-  plan_start_date: string | null;
+/** Row returned by the plan_day_chapters() SQL function */
+export interface PlanDayChapterRow {
+  chapter_id: number;
+  chapter_number: number;
+  book_usfm: string;
+  book_name: string;
+  verse_ids: number[];
+  verse_numbers: number[];
+  read_verse_ids: number[];
 }
 
-export interface VerseContext {
-  verseNumber: number;
+/** Row returned by the plan_days_summary() SQL function */
+export interface PlanDaySummaryRow {
+  day_number: number;
+  total_verses: number;
+  verses_read: number;
+  start_book_name: string;
+  start_book_usfm: string;
+  start_chapter: number;
+  end_book_name: string;
+  end_book_usfm: string;
+  end_chapter: number;
+}
+
+/** One chapter (or part of a chapter) that belongs to a plan day. */
+export interface PlanDayChapterDto {
+  chapterId: number;
   chapterNumber: number;
+  /** USFM code, e.g. "GEN" — used for the jw.org deep-link */
+  book: string;
   bookName: string;
-  bookUsfm: string;
+  /** Verse ids in this chapter that belong to the day, ordered by verse number */
+  verseIds: number[];
+  /** Verse numbers matching verseIds index-for-index */
+  verseNumbers: number[];
+  /** Subset of verseIds this user has already read */
+  readVerseIds: number[];
 }
 
 export interface PlanDayViewDto {
+  planId: string;
   dayNumber: number;
+  totalDays: number;
   label: string;
-  /** USFM code of the start verse's book (used by frontend for jw.org deep-link) */
+  /** USFM code of the day's first book */
   book: string;
-  /** Chapter number of the start verse */
+  /** First chapter of the day */
   chapter: number;
   startVerse: number;
   endVerse: number;
   startVerseId: number;
   endVerseId: number;
+  /** Every chapter in the day, across book boundaries, in reading order */
+  chapters: PlanDayChapterDto[];
+  totalVerses: number;
+  versesRead: number;
   isToday: boolean;
   offsetFromToday: number;
 }
 
-/** Lightweight summary for the 365-day plan list view */
+/** Lightweight summary for the plan list view */
 export interface PlanDaySummaryDto {
   dayNumber: number;
   label: string;
@@ -47,16 +79,9 @@ export interface PlanDaySummaryDto {
   offsetFromToday: number;
 }
 
-export interface PlanDaySummaryRow {
-  day_number: number;
-  start_global_order: number;
-  end_global_order: number;
-  /** resolved by parallel verse context queries */
-  label?: string;
-}
-
 export interface PlanListItemDto {
   id: string;
   name: string;
   totalDays: number;
+  isDefault: boolean;
 }

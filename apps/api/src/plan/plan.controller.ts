@@ -9,11 +9,13 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { PlanService } from './plan.service';
+import { TimeZone } from '../common/time-zone';
 
 @Controller('plan')
 export class PlanController {
@@ -32,23 +34,24 @@ export class PlanController {
   /** GET /api/plan/today — returns today's plan day for the authenticated user */
   @Get('today')
   @UseGuards(AuthGuard)
-  async getPlanToday(@CurrentUser() user: { id: string }) {
-    const data = await this.planService.getPlanToday(user.id);
+  async getPlanToday(@CurrentUser() user: { id: string }, @TimeZone() tz: string) {
+    const data = await this.planService.getPlanToday(user.id, tz);
     return { data };
   }
 
   /**
    * GET /api/plan/:planId/days/summary
-   * Returns completion % for all 365 days in one request.
+   * Returns completion % for every day of the plan in one request.
    * Must be declared before :planId/day/:dayNumber to avoid param collision.
    */
   @Get(':planId/days/summary')
   @UseGuards(AuthGuard)
   async getAllDaysSummary(
-    @Param('planId') planId: string,
+    @Param('planId', new ParseUUIDPipe()) planId: string,
     @CurrentUser() user: { id: string },
+    @TimeZone() tz: string,
   ) {
-    const data = await this.planService.getAllDaysSummary(planId, user.id);
+    const data = await this.planService.getAllDaysSummary(planId, user.id, tz);
     return { data };
   }
 
@@ -56,11 +59,12 @@ export class PlanController {
   @Get(':planId/day/:dayNumber')
   @UseGuards(AuthGuard)
   async getPlanDay(
-    @Param('planId') planId: string,
+    @Param('planId', new ParseUUIDPipe()) planId: string,
     @Param('dayNumber', ParseIntPipe) dayNumber: number,
     @CurrentUser() user: { id: string },
+    @TimeZone() tz: string,
   ) {
-    const data = await this.planService.getPlanDay(planId, dayNumber, user.id);
+    const data = await this.planService.getPlanDay(planId, dayNumber, user.id, tz);
     return { data };
   }
 }

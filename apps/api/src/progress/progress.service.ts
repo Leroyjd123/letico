@@ -4,15 +4,22 @@
  * The sole write path for all reading progress.
  *
  * CRITICAL INVARIANT: every insert into verse_reads MUST use upsert with
- * { onConflict: 'user_id,verse_id', ignoreDuplicates: true }. Any call
- * to .insert() without this protection is a P0 bug — it would throw a
- * unique constraint violation if the user re-reads a verse.
+ * { onConflict: 'user_id,verse_id', ignoreDuplicates: true } so re-reads are
+ * silently ignored.
+ *
+ * PostgREST caps SELECTs at 1,000 rows, so nothing here loads a user's whole
+ * reading history into Node. Multi-row work is done by SQL functions
+ * (migrations/002) or, for export, by explicit pagination.
  */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectSupabase } from '../supabase/inject-supabase.decorator';
 import { SupabaseProvider } from '../supabase/supabase.provider';
+import { dbError } from '../common/db-errors';
+import { todayDayNumber } from '../common/time-zone';
+import { resolveUserPlan } from '../common/user-plan';
 import type {
   MarkVersesReadResponseDto,
+  UnmarkVersesReadResponseDto,
   ContinuePositionDto,
   ProgressSummaryDto,
   DailyCountDto,
@@ -20,389 +27,202 @@ import type {
   ExportProgressResponseDto,
 } from './progress.types';
 
-const TOTAL_BIBLE_VERSES = 31102;
+/** Offline reads older than this are stamped with the oldest allowed time. */
+const MAX_BACKDATE_MS = 30 * 86_400_000;
+const EXPORT_PAGE_SIZE = 1000;
+
+/** Picks the read timestamp: the client's (offline queue) clamped to [now − 30d, now]. */
+export function clampReadAt(clientReadAt: string | undefined, now: Date = new Date()): string {
+  if (!clientReadAt) return now.toISOString();
+  const t = Date.parse(clientReadAt);
+  if (Number.isNaN(t)) return now.toISOString();
+  const clamped = Math.min(now.getTime(), Math.max(now.getTime() - MAX_BACKDATE_MS, t));
+  return new Date(clamped).toISOString();
+}
 
 @Injectable()
 export class ProgressService {
   constructor(@InjectSupabase() private readonly supabase: SupabaseProvider) {}
 
-  /**
-   * Marks verses as read for the given user.
-   * Uses upsert with ignoreDuplicates to safely handle re-reads.
-   * read_at is set server-side — never trust a client timestamp.
-   */
   async markVersesRead(
     userId: string,
     verseIds: number[],
+    readAt?: string,
   ): Promise<MarkVersesReadResponseDto> {
     const db = this.supabase.getClient();
-    const readAt = new Date().toISOString();
+    const ids = Array.from(new Set(verseIds));
+    const at = clampReadAt(readAt);
 
-    const rows = verseIds.map((verseId) => ({
-      user_id: userId,
-      verse_id: verseId,
-      read_at: readAt,
-    }));
-
-    // ignoreDuplicates: true → only inserts new rows; already-read verses are silently skipped.
-    // The returned data contains only the newly inserted rows.
     const { data, error } = await db
       .from('verse_reads')
-      .upsert(rows, { onConflict: 'user_id,verse_id', ignoreDuplicates: true })
+      .upsert(
+        ids.map((verseId) => ({ user_id: userId, verse_id: verseId, read_at: at })),
+        { onConflict: 'user_id,verse_id', ignoreDuplicates: true },
+      )
       .select('verse_id');
-
-    if (error) {
-      throw new Error(`Failed to mark verses read: ${error.message}`);
-    }
+    if (error) dbError('MARK_READ_FAILED', error);
 
     const inserted = (data ?? []).length;
-    const alreadyRead = verseIds.length - inserted;
-
-    return { inserted, alreadyRead };
+    return { inserted, alreadyRead: ids.length - inserted };
   }
 
-  /**
-   * Returns the first unread verse in the user's plan (ordered by global_order).
-   * Returns null if the user has read all verses in the plan.
-   */
+  /** Marks verses as unread again (undo a mistaken tap). */
+  async unmarkVersesRead(userId: string, verseIds: number[]): Promise<UnmarkVersesReadResponseDto> {
+    const db = this.supabase.getClient();
+    const { data, error } = await db
+      .from('verse_reads')
+      .delete()
+      .eq('user_id', userId)
+      .in('verse_id', Array.from(new Set(verseIds)))
+      .select('verse_id');
+    if (error) dbError('UNMARK_READ_FAILED', error);
+    return { removed: (data ?? []).length };
+  }
+
+  /** First unread verse in the user's plan, or null when everything is read. */
   async getContinuePosition(userId: string): Promise<ContinuePositionDto | null> {
     const db = this.supabase.getClient();
+    const { planId } = await resolveUserPlan(db, userId);
 
-    // Resolve the user's plan id
-    const { data: userRow } = await db
-      .from('users')
-      .select('plan_id')
-      .eq('id', userId)
-      .is('archived_at', null)
-      .single();
+    const { data, error } = await db.rpc('first_unread_verse', {
+      p_user_id: userId,
+      p_plan_id: planId,
+    });
+    if (error) dbError('CONTINUE_LOOKUP_FAILED', error);
 
-    let planId: string;
-    if (userRow && (userRow as { plan_id: string | null }).plan_id) {
-      planId = (userRow as { plan_id: string }).plan_id;
-    } else {
-      const { data: defaultPlan } = await db
-        .from('plans')
-        .select('id')
-        .eq('name', '1 year plan')
-        .limit(1)
-        .single();
-      if (!defaultPlan) return null;
-      planId = (defaultPlan as { id: string }).id;
-    }
-
-    // Get plan's total global_order range
-    const { data: lastDay } = await db
-      .from('plan_days')
-      .select('end_global_order')
-      .eq('plan_id', planId)
-      .order('day_number', { ascending: false })
-      .limit(1)
-      .single();
-
-    const { data: firstDay } = await db
-      .from('plan_days')
-      .select('start_global_order')
-      .eq('plan_id', planId)
-      .order('day_number', { ascending: true })
-      .limit(1)
-      .single();
-
-    if (!firstDay || !lastDay) return null;
-
-    const minOrder = (firstDay as { start_global_order: number }).start_global_order;
-    const maxOrder = (lastDay as { end_global_order: number }).end_global_order;
-
-    // Get all verse_ids the user has already read
-    const { data: readData } = await db
-      .from('verse_reads')
-      .select('verse_id')
-      .eq('user_id', userId);
-
-    const readIds = (readData ?? []).map((r: { verse_id: number }) => r.verse_id);
-
-    // Find the first verse in the plan range that hasn't been read
-    let query = db
-      .from('verses')
-      .select(`
-        id,
-        number,
-        chapters (
-          number,
-          books (
-            name,
-            usfm_code
-          )
-        )
-      `)
-      .gte('global_order', minOrder)
-      .lte('global_order', maxOrder)
-      .order('global_order', { ascending: true })
-      .limit(1);
-
-    if (readIds.length > 0) {
-      // Filter out already-read verses
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      query = (query as any).not('id', 'in', `(${readIds.join(',')})`);
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: nextVerse } = await (query as any).single();
-
-    if (!nextVerse) return null; // All done!
-
-    const v = nextVerse as {
-      id: number;
-      number: number;
-      chapters: { number: number; books: { name: string; usfm_code: string } };
-    };
-    const chapter = Array.isArray(v.chapters) ? v.chapters[0] : v.chapters;
-    const book = Array.isArray(chapter?.books) ? chapter.books[0] : chapter?.books;
+    const row = ((data ?? []) as Array<{
+      verse_id: number;
+      verse_number: number;
+      chapter_number: number;
+      book_name: string;
+      book_usfm: string;
+    }>)[0];
+    if (!row) return null;
 
     return {
-      bookUsfm: book?.usfm_code ?? '',
-      bookName: book?.name ?? '',
-      chapterNumber: chapter?.number ?? 0,
-      verseNumber: v.number,
-      verseId: v.id,
+      bookUsfm: row.book_usfm,
+      bookName: row.book_name,
+      chapterNumber: row.chapter_number,
+      verseNumber: row.verse_number,
+      verseId: row.verse_id,
     };
   }
 
-  /**
-   * Returns a progress summary for the user.
-   */
-  async getProgressSummary(userId: string): Promise<ProgressSummaryDto> {
+  async getProgressSummary(userId: string, timeZone: string): Promise<ProgressSummaryDto> {
     const db = this.supabase.getClient();
+    const plan = await resolveUserPlan(db, userId);
 
-    const { count } = await db
-      .from('verse_reads')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
+    const [totalRes, streakRes, boundsRes] = await Promise.all([
+      db.from('verse_reads').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+      db.rpc('reading_streak', { p_user_id: userId, p_tz: timeZone }),
+      db
+        .from('plan_days')
+        .select('day_number, start_global_order, end_global_order')
+        .eq('plan_id', plan.planId)
+        .in('day_number', [1, plan.totalDays]),
+    ]);
+    if (totalRes.error) dbError('SUMMARY_FAILED', totalRes.error);
+    if (streakRes.error) dbError('SUMMARY_FAILED', streakRes.error);
+    if (boundsRes.error) dbError('SUMMARY_FAILED', boundsRes.error);
 
-    const totalVersesRead = count ?? 0;
-    const completionPct = Math.round((totalVersesRead / TOTAL_BIBLE_VERSES) * 10000) / 100;
+    const bounds = (boundsRes.data ?? []) as Array<{
+      day_number: number;
+      start_global_order: number;
+      end_global_order: number;
+    }>;
+    const firstDay = bounds.find((d) => d.day_number === 1);
+    const lastDay = bounds.find((d) => d.day_number === plan.totalDays);
 
-    // Calculate streak
-    const { data: readDates } = await db
-      .from('verse_reads')
-      .select('read_at')
-      .eq('user_id', userId)
-      .order('read_at', { ascending: false });
-
-    const uniqueUtcDates = Array.from(
-      new Set(
-        (readDates ?? []).map((r: { read_at: string }) => {
-          const d = new Date(r.read_at);
-          return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-        })
-      )
-    ).sort((a, b) => b.localeCompare(a));
-
-    let streakDays = 0;
-    const today = new Date();
-    const todayStr = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}-${String(today.getUTCDate()).padStart(2, '0')}`;
-    const yesterday = new Date(today);
-    yesterday.setUTCDate(today.getUTCDate() - 1);
-    const yesterdayStr = `${yesterday.getUTCFullYear()}-${String(yesterday.getUTCMonth() + 1).padStart(2, '0')}-${String(yesterday.getUTCDate()).padStart(2, '0')}`;
-
-    if (uniqueUtcDates.length > 0) {
-      if (uniqueUtcDates[0] === todayStr) {
-        streakDays = 1;
-        let currentDate = new Date(today);
-        for (let i = 1; i < uniqueUtcDates.length; i++) {
-          currentDate.setUTCDate(currentDate.getUTCDate() - 1);
-          const expectedStr = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, '0')}-${String(currentDate.getUTCDate()).padStart(2, '0')}`;
-          if (uniqueUtcDates[i] === expectedStr) {
-            streakDays++;
-          } else {
-            break;
-          }
-        }
-      } else if (uniqueUtcDates[0] === yesterdayStr) {
-        streakDays = 1;
-        let currentDate = new Date(yesterday);
-        for (let i = 1; i < uniqueUtcDates.length; i++) {
-          currentDate.setUTCDate(currentDate.getUTCDate() - 1);
-          const expectedStr = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, '0')}-${String(currentDate.getUTCDate()).padStart(2, '0')}`;
-          if (uniqueUtcDates[i] === expectedStr) {
-            streakDays++;
-          } else {
-            break;
-          }
-        }
-      }
-    }
-
-    // Calculate ahead/behind
+    let completionPct = 0;
     let aheadBehindVerses: number | null = null;
-    const { data: userRow } = await db
-      .from('users')
-      .select('plan_id, plan_start_date')
-      .eq('id', userId)
-      .is('archived_at', null)
-      .single();
 
-    if (userRow && (userRow as { plan_id: string | null }).plan_id) {
-      const planId = (userRow as { plan_id: string }).plan_id;
-      const planStartDate = (userRow as { plan_start_date: string | null }).plan_start_date;
+    if (firstDay && lastDay) {
+      const planStart = firstDay.start_global_order;
+      const planTotal = lastDay.end_global_order - planStart + 1;
 
-      if (planStartDate) {
-        const start = new Date(planStartDate);
-        const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-        const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-        const expectedDayNumber = Math.max(1, Math.min(365, Math.floor((todayUtc - startUtc) / 86400000) + 1));
+      const { data: readInPlan, error } = await db.rpc('count_verses_read_in_range', {
+        p_user_id: userId,
+        p_start_global_order: planStart,
+        p_end_global_order: lastDay.end_global_order,
+      });
+      if (error) dbError('SUMMARY_FAILED', error);
+      const versesReadInPlan = (readInPlan as number | null) ?? 0;
+      completionPct = Math.round((versesReadInPlan / planTotal) * 10000) / 100;
 
-        const { data: planDays } = await db
+      if (plan.planStartDate) {
+        // Everything up to and including today's reading is "expected".
+        // Reading ahead counts as ahead; this assumes a sequential plan.
+        const today = todayDayNumber(plan.planStartDate, timeZone, plan.totalDays);
+        const { data: todayRow, error: todayError } = await db
           .from('plan_days')
-          .select('start_global_order, end_global_order')
-          .eq('plan_id', planId)
-          .lte('day_number', expectedDayNumber)
-          .order('day_number', { ascending: true });
-
-        if (planDays && planDays.length > 0) {
-          const days = planDays as Array<{ start_global_order: number; end_global_order: number }>;
-          let expectedVerseCount = 0;
-          for (const d of days) {
-            expectedVerseCount += (d.end_global_order - d.start_global_order + 1);
-          }
-
-          const firstDayStart = days[0]!.start_global_order;
-          const lastDayEnd = days[days.length - 1]!.end_global_order;
-
-          const { data: countData } = await db.rpc('count_verses_read_in_range', {
-            p_user_id: userId,
-            p_start_global_order: firstDayStart,
-            p_end_global_order: lastDayEnd,
-          });
-
-          const versesReadInPlanRange = (countData as number) ?? 0;
-          aheadBehindVerses = versesReadInPlanRange - expectedVerseCount;
+          .select('end_global_order')
+          .eq('plan_id', plan.planId)
+          .eq('day_number', today)
+          .maybeSingle();
+        if (todayError) dbError('SUMMARY_FAILED', todayError);
+        if (todayRow) {
+          const expected = (todayRow as { end_global_order: number }).end_global_order - planStart + 1;
+          aheadBehindVerses = versesReadInPlan - expected;
         }
       }
     }
 
     return {
-      totalVersesRead,
+      totalVersesRead: totalRes.count ?? 0,
       completionPct,
-      streakDays,
+      streakDays: (streakRes.data as number | null) ?? 0,
       aheadBehindVerses,
     };
   }
 
-  async getDailyCounts(userId: string, days: number): Promise<DailyCountDto[]> {
-    const db = this.supabase.getClient();
-
-    const { data: readDates } = await db
-      .from('verse_reads')
-      .select('read_at')
-      .eq('user_id', userId);
-
-    const countsByDate = new Map<string, number>();
-
-    const today = new Date();
-    for (let i = 0; i < days; i++) {
-      const target = new Date(today);
-      target.setUTCDate(today.getUTCDate() - i);
-      const str = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}-${String(target.getUTCDate()).padStart(2, '0')}`;
-      countsByDate.set(str, 0);
-    }
-
-    if (readDates) {
-      for (const row of readDates) {
-        const d = new Date((row as { read_at: string }).read_at);
-        const str = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-        if (countsByDate.has(str)) {
-          countsByDate.set(str, countsByDate.get(str)! + 1);
-        }
-      }
-    }
-
-    return Array.from(countsByDate.entries())
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+  async getDailyCounts(userId: string, days: number, timeZone: string): Promise<DailyCountDto[]> {
+    const { data, error } = await this.supabase.getClient().rpc('daily_read_counts', {
+      p_user_id: userId,
+      p_days: days,
+      p_tz: timeZone,
+    });
+    if (error) dbError('DAILY_COUNTS_FAILED', error);
+    return ((data ?? []) as Array<{ day: string; count: number }>).map((r) => ({
+      date: r.day,
+      count: r.count,
+    }));
   }
 
-  /**
-   * Archives all of the user's verse_reads into archived_verse_reads, then
-   * deletes them from verse_reads.
-   *
-   * NOTE: This operation is non-atomic. The archive insert and the delete are
-   * two separate DB calls. If the archive insert fails, we abort and never
-   * delete — so no progress is lost. However, if the delete fails after a
-   * successful insert, archived rows will exist without the originals being
-   * removed. Callers should surface this as a retryable error.
-   */
+  /** Archives and deletes ALL of the user's reads in one transaction. */
   async resetProgress(userId: string): Promise<ResetProgressResponseDto> {
-    const db = this.supabase.getClient();
-
-    const { data: rows, error: fetchError } = await db
-      .from('verse_reads')
-      .select('verse_id, read_at')
-      .eq('user_id', userId);
-
-    if (fetchError) {
-      throw new Error(`Failed to fetch verse_reads: ${fetchError.message}`);
-    }
-
-    const readRows = (rows ?? []) as Array<{ verse_id: number; read_at: string }>;
-
-    if (readRows.length > 0) {
-      const { error: archiveError } = await db
-        .from('archived_verse_reads')
-        .insert(
-          readRows.map((r) => ({
-            user_id: userId,
-            verse_id: r.verse_id,
-            read_at: r.read_at,
-          })),
-        );
-
-      if (archiveError) {
-        throw new Error(`Failed to archive verse_reads: ${archiveError.message}`);
-      }
-
-      const { error: deleteError } = await db
-        .from('verse_reads')
-        .delete()
-        .eq('user_id', userId);
-
-      if (deleteError) {
-        throw new Error(`Failed to delete verse_reads after archive: ${deleteError.message}`);
-      }
-    }
-
-    return { archivedCount: readRows.length };
+    const { data, error } = await this.supabase
+      .getClient()
+      .rpc('reset_progress', { p_user_id: userId });
+    if (error) dbError('RESET_FAILED', error);
+    return { archivedCount: (data as number | null) ?? 0 };
   }
 
-  /**
-   * Returns all verse_reads for the user as a portable export payload.
-   * read_at timestamps are preserved as-is from the database.
-   */
+  /** Full verse_reads export, paginated past the 1,000-row PostgREST cap. */
   async exportProgress(userId: string): Promise<ExportProgressResponseDto> {
     const db = this.supabase.getClient();
+    const verseReads: Array<{ verseId: number; readAt: string }> = [];
 
-    const { data, error } = await db
-      .from('verse_reads')
-      .select('verse_id, read_at')
-      .eq('user_id', userId)
-      .order('read_at', { ascending: true });
+    for (let from = 0; ; from += EXPORT_PAGE_SIZE) {
+      const { data, error } = await db
+        .from('verse_reads')
+        .select('verse_id, read_at')
+        .eq('user_id', userId)
+        .order('read_at', { ascending: true })
+        .order('verse_id', { ascending: true })
+        .range(from, from + EXPORT_PAGE_SIZE - 1);
+      if (error) dbError('EXPORT_FAILED', error);
 
-    if (error) {
-      throw new Error(`Failed to export verse_reads: ${error.message}`);
+      const page = (data ?? []) as Array<{ verse_id: number; read_at: string }>;
+      for (const r of page) verseReads.push({ verseId: r.verse_id, readAt: r.read_at });
+      if (page.length < EXPORT_PAGE_SIZE) break;
     }
 
-    const readRows = (data ?? []) as Array<{ verse_id: number; read_at: string }>;
-
-    return {
-      userId,
-      exportedAt: new Date().toISOString(),
-      verseReads: readRows.map((r) => ({ verseId: r.verse_id, readAt: r.read_at })),
-    };
+    return { userId, exportedAt: new Date().toISOString(), verseReads };
   }
 
   /**
-   * Returns the read verse IDs for a user within the range
-   * defined by startVerseId..endVerseId (inclusive, using global_order internally).
-   * Used by the frontend to compute per-chapter read state.
+   * Read verse ids for a user within startVerseId..endVerseId (inclusive, by
+   * global_order). Ranges are capped well below the 1,000-row limit.
    */
   async getReadVerseIdsInRange(
     userId: string,
@@ -411,30 +231,28 @@ export class ProgressService {
   ): Promise<number[]> {
     const db = this.supabase.getClient();
 
-    // Resolve global_orders for the boundary verses
-    const { data: bounds } = await db
+    const { data: bounds, error: boundsError } = await db
       .from('verses')
       .select('id, global_order')
       .in('id', [startVerseId, endVerseId]);
+    if (boundsError) dbError('READS_LOOKUP_FAILED', boundsError);
 
-    if (!bounds || bounds.length < 2) return [];
-
-    const boundMap = new Map(
-      (bounds as { id: number; global_order: number }[]).map((v) => [v.id, v.global_order]),
+    const byId = new Map(
+      ((bounds ?? []) as { id: number; global_order: number }[]).map((v) => [v.id, v.global_order]),
     );
-    const minOrder = boundMap.get(startVerseId) ?? 0;
-    const maxOrder = boundMap.get(endVerseId) ?? 0;
+    const minOrder = byId.get(startVerseId);
+    const maxOrder = byId.get(endVerseId);
+    if (minOrder === undefined || maxOrder === undefined || maxOrder < minOrder) return [];
+    const upper = Math.min(maxOrder, minOrder + 999);
 
-    if (minOrder === 0 || maxOrder === 0) return [];
-
-    // Get all verse_reads for this user in the range
-    const { data: readData } = await db
+    const { data, error } = await db
       .from('verse_reads')
       .select('verse_id, verses!inner(global_order)')
       .eq('user_id', userId)
       .gte('verses.global_order', minOrder)
-      .lte('verses.global_order', maxOrder);
+      .lte('verses.global_order', upper);
+    if (error) dbError('READS_LOOKUP_FAILED', error);
 
-    return (readData ?? []).map((r: { verse_id: number }) => r.verse_id);
+    return ((data ?? []) as Array<{ verse_id: number }>).map((r) => r.verse_id);
   }
 }

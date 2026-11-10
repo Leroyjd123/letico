@@ -9,6 +9,8 @@ import { Controller, Post, Get, Body, HttpCode, HttpStatus, UseGuards } from '@n
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user.decorator';
+import { Throttle } from '@nestjs/throttler';
+import { SendOtpDto, VerifyOtpDto, MigrateGuestDto } from './auth.types';
 
 @Controller('auth')
 export class AuthController {
@@ -21,6 +23,7 @@ export class AuthController {
    */
   @Post('guest')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async createGuest() {
     const data = await this.authService.createGuest();
     return { data };
@@ -44,8 +47,9 @@ export class AuthController {
    */
   @Post('otp/send')
   @HttpCode(HttpStatus.OK)
-  async sendOtp(@Body() body: { email: string }) {
-    const data = await this.authService.sendOtp(body.email ?? '');
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async sendOtp(@Body() body: SendOtpDto) {
+    const data = await this.authService.sendOtp(body.email.trim());
     return { data };
   }
 
@@ -56,8 +60,9 @@ export class AuthController {
    */
   @Post('otp/verify')
   @HttpCode(HttpStatus.OK)
-  async verifyOtp(@Body() body: { email: string; token: string }) {
-    const data = await this.authService.verifyOtp(body.email ?? '', body.token ?? '');
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async verifyOtp(@Body() body: VerifyOtpDto) {
+    const data = await this.authService.verifyOtp(body.email.trim(), body.token);
     return { data };
   }
 
@@ -70,10 +75,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   async migrateGuest(
-    @Body() body: { guestToken: string },
+    @Body() body: MigrateGuestDto,
     @CurrentUser() user: { id: string },
   ) {
-    const data = await this.authService.migrateGuest(user.id, body.guestToken ?? '');
+    const data = await this.authService.migrateGuest(user.id, body.guestToken);
     return { data };
   }
 }

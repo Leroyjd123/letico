@@ -1,130 +1,55 @@
-/**
- * users.service.spec.ts
- *
- * Tests for UsersService.updateUser().
- * DB is always mocked — chain: .from().update().eq().is().select().single()
- */
-import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { SupabaseProvider } from '../supabase/supabase.provider';
+import { mockSupabase, mockProvider, type MockResult, type RecordedQuery } from '../testing/mock-supabase';
 
-const USER_ID = 'user-uuid-test';
-const PLAN_ID = 'plan-uuid-test';
+async function build(from: (q: RecordedQuery) => MockResult) {
+  const db = mockSupabase({ from });
+  const mod = await Test.createTestingModule({
+    providers: [UsersService, { provide: SupabaseProvider, useValue: mockProvider(db.client) }],
+  }).compile();
+  return { service: mod.get(UsersService), db };
+}
 
-describe('UsersService', () => {
-  let service: UsersService;
-
-  async function createService(mockClient: unknown) {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        UsersService,
-        {
-          provide: SupabaseProvider,
-          useValue: { getClient: () => mockClient },
-        },
-      ],
-    }).compile();
-    service = module.get<UsersService>(UsersService);
-  }
-
-  function buildMockClient(
-    data: unknown,
-    error: unknown = null,
-  ) {
-    const chain = {
-      update: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      is: jest.fn().mockReturnThis(),
-      select: jest.fn().mockReturnThis(),
-      single: jest.fn().mockResolvedValue({ data, error }),
-    };
-    return { from: jest.fn().mockReturnValue(chain), _chain: chain };
-  }
-
-  describe('updateUser', () => {
-    it('updates plan_id and returns the new value', async () => {
-      const { _chain, ...mockClient } = buildMockClient({
-        plan_id: PLAN_ID,
-        plan_start_date: null,
-      });
-      await createService(mockClient);
-
-      const result = await service.updateUser(USER_ID, { planId: PLAN_ID });
-
-      expect(result.planId).toBe(PLAN_ID);
-      expect(result.planStartDate).toBeNull();
-      expect(_chain.update).toHaveBeenCalledWith(
-        expect.objectContaining({ plan_id: PLAN_ID }),
-      );
+describe('UsersService.updateUser', () => {
+  it('updates the start date', async () => {
+    const { service, db } = await build(() => ({ data: { plan_id: 'p', plan_start_date: '2026-04-01' } }));
+    await expect(service.updateUser('u', { planStartDate: '2026-04-01' })).resolves.toEqual({
+      planId: 'p',
+      planStartDate: '2026-04-01',
     });
+    expect(db.queries[0]!.argsOf('update')[0]).toEqual({ plan_start_date: '2026-04-01' });
+  });
 
-    it('updates plan_start_date and returns the new value', async () => {
-      const { _chain, ...mockClient } = buildMockClient({
-        plan_id: null,
-        plan_start_date: '2026-04-01',
-      });
-      await createService(mockClient);
+  it('can clear the start date', async () => {
+    const { service, db } = await build(() => ({ data: { plan_id: 'p', plan_start_date: null } }));
+    await service.updateUser('u', { planStartDate: null });
+    expect(db.queries[0]!.argsOf('update')[0]).toEqual({ plan_start_date: null });
+  });
 
-      const result = await service.updateUser(USER_ID, { planStartDate: '2026-04-01' });
+  it('rejects a plan with no days (PLAN_NOT_FOUND, not USER_NOT_FOUND)', async () => {
+    const { service } = await build((q) => (q.table === 'plan_days' ? { count: 0 } : {}));
+    await expect(service.updateUser('u', { planId: 'empty' })).rejects.toThrow(BadRequestException);
+  });
 
-      expect(result.planStartDate).toBe('2026-04-01');
-      expect(_chain.update).toHaveBeenCalledWith(
-        expect.objectContaining({ plan_start_date: '2026-04-01' }),
-      );
+  it('accepts a plan with days', async () => {
+    const { service } = await build((q) =>
+      q.table === 'plan_days' ? { count: 365 } : { data: { plan_id: 'p1', plan_start_date: null } },
+    );
+    await expect(service.updateUser('u', { planId: 'p1' })).resolves.toEqual({
+      planId: 'p1',
+      planStartDate: null,
     });
+  });
 
-    it('updates both fields together', async () => {
-      const { _chain, ...mockClient } = buildMockClient({
-        plan_id: PLAN_ID,
-        plan_start_date: '2026-04-01',
-      });
-      await createService(mockClient);
+  it('rejects an empty update', async () => {
+    const { service } = await build(() => ({}));
+    await expect(service.updateUser('u', {})).rejects.toThrow(BadRequestException);
+  });
 
-      const result = await service.updateUser(USER_ID, {
-        planId: PLAN_ID,
-        planStartDate: '2026-04-01',
-      });
-
-      expect(result.planId).toBe(PLAN_ID);
-      expect(result.planStartDate).toBe('2026-04-01');
-      expect(_chain.update).toHaveBeenCalledWith({
-        plan_id: PLAN_ID,
-        plan_start_date: '2026-04-01',
-      });
-    });
-
-    it('throws NotFoundException when DB returns an error', async () => {
-      const { ...mockClient } = buildMockClient(null, { message: 'not found' });
-      await createService(mockClient);
-
-      await expect(
-        service.updateUser(USER_ID, { planId: PLAN_ID }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws NotFoundException when data is null (user row not found)', async () => {
-      const { ...mockClient } = buildMockClient(null, null);
-      await createService(mockClient);
-
-      await expect(
-        service.updateUser(USER_ID, { planId: PLAN_ID }),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('only includes defined fields in the update object (no undefined keys)', async () => {
-      const { _chain, ...mockClient } = buildMockClient({
-        plan_id: PLAN_ID,
-        plan_start_date: null,
-      });
-      await createService(mockClient);
-
-      // Only planId provided — plan_start_date must NOT be in the update payload
-      await service.updateUser(USER_ID, { planId: PLAN_ID });
-
-      const updateArg = (_chain.update.mock.calls[0] as unknown[][])[0] as Record<string, unknown>;
-      expect(Object.keys(updateArg)).toEqual(['plan_id']);
-      expect(updateArg['plan_start_date']).toBeUndefined();
-    });
+  it('returns USER_NOT_FOUND when no row matches', async () => {
+    const { service } = await build(() => ({ data: null }));
+    await expect(service.updateUser('u', { planStartDate: '2026-01-01' })).rejects.toThrow(NotFoundException);
   });
 });
