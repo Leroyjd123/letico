@@ -1,33 +1,45 @@
 'use client';
+
 /**
- * ReadPageClient.tsx
+ * ReadPageClient.tsx — the reading screen for one plan day.
  *
- * Client shell for the /read page.
+ * Which day: `?day=N` (from the plan list or prev/next), otherwise today.
  *
  * Data flow:
- *   1. useAuthContext() → { auth, isProvisioning } (auto-provisions guest on first visit)
- *   2. useOfflineQueue(auth) → flush pending reads + show failure banner
- *   3. useQuery ['plan','today'] → PlanDayView
- *   4. useQuery ['bible','chapters', book] → Chapter[]
- *   5. useQuery ['progress','reads'] → number[] (read verse IDs in today's range)
- *   6. useContinueReading → ContinuePosition | null
+ *   1. useAuthContext()            → auth + stable userKey (guest auto-provisioned)
+ *   2. GET /auth/me                → planId + planStartDate
+ *   3. GET /plan/today | /plan/:planId/day/:N
+ *                                  → the day's exact chapters (across books),
+ *                                    their verse ids and which are read
+ *   4. useContinueReading          → first unread verse in the whole plan
  *
- * Guest backup nudge: shown once per session after ≥ 10 chapters are marked read.
+ * Every chapter tile, the progress bar and "mark day complete" are derived
+ * from that one plan-day response, which useVerseRead updates optimistically.
+ * Because verse ids are part of the response, marking works offline.
  *
  * Architectural invariants:
- *   - All writes go through useVerseRead → POST /progress/verses (or offline queue)
+ *   - All writes go through useVerseRead (→ offline queue → API)
  *   - Never renders Bible text inline (R7)
  *   - No gamification, no pressure language (R3, R4)
  */
 import { useState, useMemo, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { PlanDayView, Chapter, MeResult } from '@lectio/types';
-import { getPlanToday, getChapters, getMe } from '../../lib/api';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { PlanDayChapter, PlanDayView, MeResult } from '@lectio/types';
+import { getPlanToday, getPlanDay, getMe, updateUser } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
+import { localDateString } from '../../lib/dates';
+import {
+  chapterReadState,
+  dayCompletionPct,
+  dayUnreadVerseIds,
+  firstUnfinishedChapter,
+  unreadVerseIds,
+} from '../../lib/planDay';
 import { logger } from '../../lib/logger';
-import type { AuthContext } from '../../lib/api';
-import { useAuthContext } from '../../components/providers/AuthProvider';
+import { useAuthContext, useSync } from '../../components/providers/AuthProvider';
 import { useVerseRead } from '../../hooks/useVerseRead';
-import { useOfflineQueue } from '../../hooks/useOfflineQueue';
 import { useContinueReading } from '../../hooks/useContinueReading';
 import { TodayCard } from '../../components/reader/TodayCard';
 import { ChapterGrid, type ChapterGridItem } from '../../components/reader/ChapterGrid';
@@ -35,241 +47,195 @@ import { VerseSelectorModal } from '../../components/modals/VerseSelectorModal';
 import { OpenInJWButton } from '../../components/reader/OpenInJWButton';
 import { ContinuePill } from '../../components/reader/ContinuePill';
 import { GuestBackupNudge, shouldShowNudge } from '../../components/reader/GuestBackupNudge';
-import type { ReadState } from '../../components/reader/ChapterTile';
-
-const BASE_URL =
-  (typeof process !== 'undefined' ? process.env['NEXT_PUBLIC_API_BASE_URL'] : undefined) ??
-  'http://localhost:4000/api';
-
-async function fetchReadVerseIds(
-  startVerseId: number,
-  endVerseId: number,
-  auth: AuthContext,
-): Promise<number[]> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (auth.type === 'bearer') headers['Authorization'] = `Bearer ${auth.token}`;
-  else headers['X-Guest-Token'] = auth.guestToken;
-
-  const res = await fetch(
-    `${BASE_URL}/progress/reads?startVerseId=${startVerseId}&endVerseId=${endVerseId}`,
-    { headers },
-  );
-  if (!res.ok) return [];
-  const json = (await res.json()) as { data: number[] };
-  return json.data;
-}
-
-async function fetchVerseIds(chapterId: number): Promise<Array<{ id: number; number: number }>> {
-  const res = await fetch(`${BASE_URL}/bible/chapters/${chapterId}/verses`);
-  if (!res.ok) return [];
-  const json = (await res.json()) as { data: Array<{ id: number; number: number }> };
-  return json.data;
-}
-
-function authKey(auth: AuthContext | null): string {
-  if (!auth) return 'anon';
-  return auth.type === 'bearer' ? `b:${auth.token.slice(-8)}` : `g:${auth.guestToken.slice(-8)}`;
-}
+import { Button } from '../../components/ui/Button';
 
 const NUDGE_CHAPTER_THRESHOLD = 10;
 
-export function ReadPageClient() {
-  const { auth, isProvisioning } = useAuthContext();
-  const { hasPermanentFailure } = useOfflineQueue(auth);
-  const { markChapter, markDayComplete } = useVerseRead(auth);
-  const continuePosition = useContinueReading(auth);
+function parseDay(raw: string | null): number | null {
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
 
-  const [modalState, setModalState] = useState<{
-    chapterItem: ChapterGridItem;
-    chapter: Chapter;
-    isOpen: boolean;
-  } | null>(null);
+const mutedText: React.CSSProperties = {
+  fontFamily: 'var(--font-headline)',
+  color: 'var(--color-text-muted)',
+  fontSize: '0.9375rem',
+  textTransform: 'lowercase',
+};
+
+const softCard: React.CSSProperties = {
+  padding: 'var(--space-4) var(--space-5)',
+  backgroundColor: 'var(--color-bg-surface)',
+  borderRadius: 'var(--radius-lg)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'var(--space-3)',
+};
+
+export function ReadPageClient() {
+  const { auth, userKey, isProvisioning, provisionFailed, retryProvision } = useAuthContext();
+  const { hasPermanentFailure } = useSync();
+  const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  const requestedDay = parseDay(searchParams?.get('day') ?? null);
+
+  // ── User profile (plan + start date) ──────────────────────────────────────
+  const { data: me } = useQuery<MeResult>({
+    queryKey: queryKeys.me(userKey),
+    queryFn: () => getMe(auth!),
+    enabled: auth !== null,
+    staleTime: 5 * 60_000,
+  });
+
+  // ── The plan day being shown ──────────────────────────────────────────────
+  const dayKey = queryKeys.planDay(userKey, requestedDay ?? 'today');
+  const {
+    data: planDay,
+    isLoading: planLoading,
+    isError: planError,
+    refetch: refetchPlan,
+  } = useQuery<PlanDayView>({
+    queryKey: dayKey,
+    queryFn: () =>
+      requestedDay !== null ? getPlanDay(me!.planId!, requestedDay, auth!) : getPlanToday(auth!),
+    enabled: auth !== null && (requestedDay === null || !!me?.planId),
+    staleTime: 60_000,
+  });
+
+  const { markRead, markUnread } = useVerseRead(dayKey);
+  const continueReading = useContinueReading(auth, userKey);
+
+  // ── Start date (onboarding) ───────────────────────────────────────────────
+  const startToday = useMutation({
+    mutationFn: () => updateUser({ planStartDate: localDateString() }, auth!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
+      void queryClient.invalidateQueries({ queryKey: ['progress'] });
+    },
+  });
 
   // ── Guest backup nudge ────────────────────────────────────────────────────
   const sessionChaptersRead = useRef(0);
   const [showNudge, setShowNudge] = useState(false);
-
-  function incrementChapterCount() {
-    sessionChaptersRead.current += 1;
+  function countChapters(n: number) {
+    sessionChaptersRead.current += n;
     if (
       auth?.type === 'guest' &&
       sessionChaptersRead.current >= NUDGE_CHAPTER_THRESHOLD &&
-      shouldShowNudge() &&
-      !showNudge
+      shouldShowNudge()
     ) {
       setShowNudge(true);
     }
   }
 
-  // ── User profile (to detect missing start date) ───────────────────────────
-  const { data: me } = useQuery<MeResult | null>({
-    queryKey: ['me', authKey(auth)],
-    queryFn: async () => {
-      if (!auth) return null;
+  // ── Verse selector modal ──────────────────────────────────────────────────
+  const [modal, setModal] = useState<{ chapterId: number; isOpen: boolean } | null>(null);
+  const modalChapter: PlanDayChapter | undefined = planDay?.chapters.find(
+    (c) => c.chapterId === modal?.chapterId,
+  );
 
-      try {
-        return await getMe(auth);
-      } catch (err) {
-        logger.info('read:me-query-unavailable', { authType: auth.type, err });
-        return null;
-      }
-    },
-    enabled: auth !== null,
-    staleTime: 300_000,
-    retry: false,
-  });
+  // ── Derived view state ────────────────────────────────────────────────────
+  const chapterItems = useMemo(
+    (): ChapterGridItem[] =>
+      (planDay?.chapters ?? []).map((c) => ({
+        chapterId: c.chapterId,
+        chapterNumber: c.chapterNumber,
+        book: c.book,
+        bookName: c.bookName,
+        readState: chapterReadState(c),
+      })),
+    [planDay],
+  );
+  const completionPct = planDay ? dayCompletionPct(planDay) : 0;
+  const isComplete = !!planDay && planDay.chapters.length > 0 && completionPct >= 100;
+  const jwChapter = planDay ? firstUnfinishedChapter(planDay) : undefined;
 
-  // ── Plan day ──────────────────────────────────────────────────────────────
-  const { data: planDay, isLoading: planLoading } = useQuery<PlanDayView>({
-    queryKey: ['plan', 'today', authKey(auth)],
-    queryFn: () => {
-      if (!auth) return Promise.reject(new Error('no auth'));
-      return getPlanToday(auth);
-    },
-    enabled: auth !== null,
-    staleTime: 60_000,
-  });
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  function findChapter(chapterId: number) {
+    return planDay?.chapters.find((c) => c.chapterId === chapterId);
+  }
 
-  // ── Chapters for today's book ─────────────────────────────────────────────
-  const { data: allChapters } = useQuery<Chapter[]>({
-    queryKey: ['bible', 'chapters', planDay?.book],
-    queryFn: () => getChapters(planDay!.book),
-    enabled: !!planDay?.book,
-    staleTime: Infinity,
-  });
-
-  // ── Read verse IDs in today's range ──────────────────────────────────────
-  const { data: readVerseIds } = useQuery<number[]>({
-    queryKey: ['progress', 'reads', planDay?.startVerseId, planDay?.endVerseId, authKey(auth)],
-    queryFn: () =>
-      auth && planDay
-        ? fetchReadVerseIds(planDay.startVerseId, planDay.endVerseId, auth)
-        : Promise.resolve([]),
-    enabled: auth !== null && !!planDay,
-    staleTime: 30_000,
-  });
-
-  const readVerseIdSet = useMemo(() => new Set(readVerseIds ?? []), [readVerseIds]);
-
-  // ── Modal verse data ──────────────────────────────────────────────────────
-  const { data: modalVerses } = useQuery({
-    queryKey: ['bible', 'verses', modalState?.chapter.id],
-    queryFn: () => fetchVerseIds(modalState!.chapter.id),
-    enabled: modalState !== null,
-    staleTime: Infinity,
-  });
-
-  // ── Chapter grid items ────────────────────────────────────────────────────
-  const chapterItems = useMemo((): ChapterGridItem[] => {
-    if (!planDay || !allChapters) return [];
-
-    const relevantChapters = allChapters.filter(
-      (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 8,
-    );
-
-    const totalInRange = planDay.endVerse - planDay.startVerse + 1;
-
-    return relevantChapters.map((chapter): ChapterGridItem => {
-      let readState: ReadState = 'unread';
-      const readCount = readVerseIdSet.size;
-      if (chapter.number === planDay.chapter) {
-        if (readCount === 0) readState = 'unread';
-        else if (readCount >= totalInRange) readState = 'read';
-        else readState = 'partial';
-      }
-      return { chapterId: chapter.id, chapterNumber: chapter.number, readState };
-    });
-  }, [planDay, allChapters, readVerseIdSet]);
-
-  // ── Completion % ─────────────────────────────────────────────────────────
-  // Use verse IDs (not verse numbers) — verse numbers reset per chapter so
-  // endVerse - startVerse is wrong for multi-chapter days.
-  const totalVersesInRange = planDay ? planDay.endVerseId - planDay.startVerseId + 1 : 1;
-  const completionPct = planDay
-    ? Math.min(100, Math.round((readVerseIdSet.size / Math.max(totalVersesInRange, 1)) * 100))
-    : 0;
-  const isComplete = completionPct >= 100;
-
-  // ── Handlers ─────────────────────────────────────────────────────────────
   function handleTap(item: ChapterGridItem) {
-    void (async () => {
-      logger.action('chapter:tap', { chapterId: item.chapterId, chapterNumber: item.chapterNumber });
-      const verses = await fetchVerseIds(item.chapterId);
-      logger.info('chapter:tap:verses-fetched', { count: verses.length });
-      markChapter(verses.map((v) => v.id));
-      incrementChapterCount();
-    })();
+    const chapter = findChapter(item.chapterId);
+    if (!chapter) return;
+    logger.action('chapter:tap', { chapterId: chapter.chapterId, state: item.readState });
+    if (item.readState === 'read') {
+      markUnread(chapter.verseIds); // tapping a read chapter undoes it
+    } else {
+      markRead(unreadVerseIds(chapter));
+      countChapters(1);
+    }
   }
 
   function handleLongPress(item: ChapterGridItem) {
-    const chapter = allChapters?.find((c) => c.id === item.chapterId);
-    if (!chapter) return;
-    setModalState({ chapterItem: item, chapter, isOpen: true });
+    setModal({ chapterId: item.chapterId, isOpen: true });
   }
 
   function closeModal() {
-    setModalState((current) => (current ? { ...current, isOpen: false } : null));
+    setModal((m) => (m ? { ...m, isOpen: false } : null));
   }
 
   function handleMarkFull() {
-    if (!modalState || !modalVerses) return;
-    markChapter((modalVerses as Array<{ id: number }>).map((v) => v.id));
-    incrementChapterCount();
+    if (!modalChapter) return;
+    markRead(unreadVerseIds(modalChapter));
+    countChapters(1);
     closeModal();
   }
 
+  /** Marks the selected verse range read (earlier reads are kept). */
   function handleSaveRange(startVerse: number, endVerse: number) {
-    if (!modalState || !modalVerses) return;
-    const ids = (modalVerses as Array<{ id: number; number: number }>)
-      .filter((v) => v.number >= startVerse && v.number <= endVerse)
-      .map((v) => v.id);
-    markChapter(ids);
+    if (!modalChapter) return;
+    const read = new Set(modalChapter.readVerseIds);
+    const ids = modalChapter.verseIds.filter((id, i) => {
+      const num = modalChapter.verseNumbers[i]!;
+      return num >= startVerse && num <= endVerse && !read.has(id);
+    });
+    markRead(ids);
     closeModal();
   }
 
   function handleMarkDayComplete() {
-    void (async () => {
-      if (!planDay || !allChapters) return;
-      logger.action('day:complete:start', { day: planDay.dayNumber, label: planDay.label });
-      const chaptersInRange = allChapters.filter(
-        (c) => c.number >= planDay.chapter && c.number <= planDay.chapter + 8,
-      );
-      logger.info('day:complete:chapters', { count: chaptersInRange.length });
-      const versesPerChapter = await Promise.all(chaptersInRange.map((ch) => fetchVerseIds(ch.id)));
-      const allIds = versesPerChapter.flat().map((v) => v.id);
-      logger.info('day:complete:verse-ids', { count: allIds.length });
-      markDayComplete(allIds);
-    })();
+    if (!planDay) return;
+    const ids = dayUnreadVerseIds(planDay);
+    logger.action('day:complete', { day: planDay.dayNumber, verses: ids.length });
+    markRead(ids);
+    countChapters(planDay.chapters.filter((c) => chapterReadState(c) !== 'read').length);
   }
 
-  // ── Loading states ────────────────────────────────────────────────────────
+  // ── Loading / error states ────────────────────────────────────────────────
   if (auth === null) {
     return (
-      <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
-        <p
-          style={{
-            fontFamily: 'var(--font-headline)',
-            color: 'var(--color-text-muted)',
-            fontSize: '0.9375rem',
-            textTransform: 'lowercase',
-          }}
-        >
-          {isProvisioning ? 'setting up your reading…' : 'loading…'}
-        </p>
+      <div style={{ padding: 'var(--space-8)', textAlign: 'center', display: 'grid', gap: 'var(--space-4)', justifyItems: 'center' }}>
+        {provisionFailed ? (
+          <>
+            <p style={mutedText}>we couldn&apos;t reach lectio just now</p>
+            <Button variant="ghost" size="md" onClick={retryProvision}>
+              try again
+            </Button>
+          </>
+        ) : (
+          <p style={mutedText}>{isProvisioning ? 'setting up your reading…' : 'loading…'}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (planError && !planDay) {
+    return (
+      <div style={{ padding: 'var(--space-8)', textAlign: 'center', display: 'grid', gap: 'var(--space-4)', justifyItems: 'center' }}>
+        <p style={mutedText}>this reading couldn&apos;t load</p>
+        <Button variant="ghost" size="md" onClick={() => void refetchPlan()}>
+          try again
+        </Button>
       </div>
     );
   }
 
   if (planLoading || !planDay) {
     return (
-      <div
-        style={{
-          padding: 'var(--space-8) var(--space-6)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-4)',
-        }}
-      >
+      <div style={{ padding: 'var(--space-8) var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} aria-busy="true">
         <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
         {[140, 200].map((h, i) => (
           <div
@@ -286,32 +252,27 @@ export function ReadPageClient() {
     );
   }
 
-  const modalReadNums =
-    modalState && modalVerses
-      ? new Set(
-          (modalVerses as Array<{ id: number; number: number }>)
-            .filter((v) => readVerseIdSet.has(v.id))
-            .map((v) => v.number),
-        )
-      : new Set<number>();
+  const modalReadNums = new Set(
+    (modalChapter?.verseNumbers ?? []).filter((_, i) =>
+      modalChapter!.readVerseIds.includes(modalChapter!.verseIds[i]!),
+    ),
+  );
 
   return (
     <>
-      {/* Permanent sync failure banner */}
       {hasPermanentFailure && (
         <div
-          role="alert"
+          role="status"
           style={{
             padding: 'var(--space-3) var(--space-6)',
             backgroundColor: 'var(--color-bg-surface)',
-            borderBottom: '1px solid var(--color-outline)',
             fontFamily: 'var(--font-body)',
             fontSize: '0.8125rem',
             color: 'var(--color-text-muted)',
             textAlign: 'center',
           }}
         >
-          some reading couldn&apos;t sync — it&apos;s saved locally and will retry automatically
+          some reading hasn&apos;t synced yet — it&apos;s saved on this device and will retry automatically
         </div>
       )}
 
@@ -320,14 +281,14 @@ export function ReadPageClient() {
           maxWidth: '36rem',
           margin: '0 auto',
           padding: 'var(--space-6)',
-          paddingBottom: 'calc(var(--space-6) + 5rem)',
+          // leave room for the continue pill above the bottom nav
+          paddingBottom: 'calc(var(--space-6) + 4rem)',
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--space-8)',
         }}
       >
-        {/* Hero header */}
-        <div>
+        <header>
           <h1
             style={{
               fontFamily: 'var(--font-headline)',
@@ -354,9 +315,8 @@ export function ReadPageClient() {
           >
             your sanctuary of slow reflection.
           </p>
-        </div>
+        </header>
 
-        {/* Guest backup nudge — one per session, after 10 chapters */}
         {showNudge && (
           <GuestBackupNudge
             onDismiss={() => setShowNudge(false)}
@@ -367,43 +327,56 @@ export function ReadPageClient() {
           />
         )}
 
+        {me?.planStartDate === null && (
+          <div style={softCard}>
+            <p style={{ ...mutedText, color: 'var(--color-text-secondary)', margin: 0 }}>
+              when would you like day 1 to be? lectio uses it to show today&apos;s reading.
+            </p>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => startToday.mutate()}
+                disabled={startToday.isPending}
+              >
+                {startToday.isPending ? 'saving…' : 'start today'}
+              </Button>
+              <Link href="/settings" style={{ ...mutedText, fontSize: '0.875rem', color: 'var(--color-primary)' }}>
+                pick another date
+              </Link>
+            </div>
+            {startToday.isError && (
+              <p style={{ ...mutedText, fontSize: '0.8125rem', margin: 0 }}>
+                that didn&apos;t save — try again in a moment
+              </p>
+            )}
+          </div>
+        )}
+
         <TodayCard
           dayNumber={planDay.dayNumber}
+          totalDays={planDay.totalDays}
           label={planDay.label}
           completionPct={completionPct}
           isComplete={isComplete}
+          isToday={planDay.isToday}
+          dayHref={(n) => `/read?day=${n}`}
+          todayHref="/read"
           onMarkDayComplete={handleMarkDayComplete}
         />
 
-        {/* Start date nudge — shown until user sets plan_start_date in settings */}
-        {me?.planStartDate === null && (
-          <a
-            href="/settings"
-            style={{
-              display: 'block',
-              padding: 'var(--space-3) var(--space-4)',
-              backgroundColor: 'var(--color-bg-surface)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--color-outline)',
-              fontFamily: 'var(--font-headline)',
-              fontSize: '0.8125rem',
-              color: 'var(--color-text-secondary)',
-              textTransform: 'lowercase',
-              textDecoration: 'none',
-            }}
-          >
-            set your reading start date in settings to track your plan progress
-            <span style={{ color: 'var(--color-primary)', marginLeft: 'var(--space-2)' }}>
-              go to settings
-            </span>
-          </a>
+        {jwChapter && (
+          <OpenInJWButton
+            book={jwChapter.book}
+            chapter={jwChapter.chapterNumber}
+            label={`${jwChapter.bookName.toLowerCase()} ${jwChapter.chapterNumber}`}
+          />
         )}
 
-        <OpenInJWButton book={planDay.book} chapter={planDay.chapter} label={planDay.label} />
-
         {chapterItems.length > 0 && (
-          <section>
+          <section aria-labelledby="chapters-heading">
             <p
+              id="chapters-heading"
               style={{
                 fontFamily: 'var(--font-headline)',
                 fontSize: '0.875rem',
@@ -411,32 +384,35 @@ export function ReadPageClient() {
                 color: 'var(--color-text-secondary)',
                 textTransform: 'lowercase',
                 letterSpacing: '0.06em',
-                marginBottom: 'var(--space-4)',
+                marginBottom: 'var(--space-1)',
               }}
             >
               chapters
             </p>
-            <ChapterGrid
-              chapters={chapterItems}
-              onTap={handleTap}
-              onLongPress={handleLongPress}
-            />
+            <p style={{ ...mutedText, fontSize: '0.75rem', marginBottom: 'var(--space-4)' }}>
+              tap to mark read · tap again to undo · hold to choose verses
+            </p>
+            <ChapterGrid chapters={chapterItems} onTap={handleTap} onLongPress={handleLongPress} />
           </section>
         )}
       </div>
 
-      <ContinuePill position={continuePosition} onClick={() => {}} />
+      <ContinuePill
+        position={continueReading.position}
+        isLoading={continueReading.isLoading}
+        isError={continueReading.isError}
+      />
 
-      {modalState && (
+      {modal && modalChapter && (
         <VerseSelectorModal
-          isOpen={modalState.isOpen}
-          chapterName={`${planDay.label.split(' ')[0] ?? ''} ${modalState.chapter.number}`}
-          totalVerses={modalState.chapter.verseCount}
+          isOpen={modal.isOpen}
+          chapterName={`${modalChapter.bookName.toLowerCase()} ${modalChapter.chapterNumber}`}
+          totalVerses={modalChapter.verseNumbers[modalChapter.verseNumbers.length - 1] ?? modalChapter.verseIds.length}
           readVerseNumbers={modalReadNums}
           onMarkFull={handleMarkFull}
           onSaveRange={handleSaveRange}
           onClose={closeModal}
-          onExited={() => setModalState(null)}
+          onExited={() => setModal(null)}
         />
       )}
     </>

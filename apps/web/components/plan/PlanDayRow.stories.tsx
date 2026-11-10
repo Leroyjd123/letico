@@ -4,7 +4,7 @@ import { PlanDayRow } from './PlanDayRow';
 const meta: Meta<typeof PlanDayRow> = {
   title: 'Plan/PlanDayRow',
   component: PlanDayRow,
-  args: { dayNumber: 42, label: 'genesis 12–14', completionPct: 0, isToday: false, offsetFromToday: 5, onClick: () => {} },
+  args: { dayNumber: 42, label: 'genesis 12–14', completionPct: 0, isToday: false, offsetFromToday: 5, href: '/read?day=42' },
 };
 export default meta;
 type Story = StoryObj<typeof PlanDayRow>;

@@ -1,95 +1,51 @@
 'use client';
-/**
- * useVerseRead.ts
- *
- * Optimistic mutation hook for all verse-read write operations.
- *
- * Write flow (Task 4.4):
- *   1. Optimistic update — always. The tile turns read immediately.
- *   2. Enqueue to IndexedDB — always. Reads are never lost.
- *   3. If online AND auth present: call API immediately, then markSynced.
- *      If offline: skip API call. useOfflineQueue flushes on reconnect.
- *   4. On API error: leave item in IndexedDB (synced=false). Will retry on reconnect.
- *   5. After write: invalidate progress + plan queries.
- *
- * Invariant (from implementation plan):
- *   The optimistic update MUST happen immediately regardless of network state.
- */
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { markVersesRead } from '../lib/api';
-import type { AuthContext } from '../lib/api';
-import { enqueueVerseReads, markSynced } from '../lib/offlineQueue';
-import { logger } from '../lib/logger';
 
-function authId(auth: AuthContext | null): string {
-  if (!auth) return 'anon';
-  return auth.type === 'bearer' ? `b:${auth.token.slice(-8)}` : `g:${auth.guestToken.slice(-8)}`;
-}
+/**
+ * useVerseRead.ts — every reading-progress write goes through here.
+ *
+ *   1. Optimistic update of the plan-day query the screen is rendering, so the
+ *      tile changes instantly (it used to write to a cache key nothing read).
+ *   2. Enqueue to IndexedDB — always, so nothing is lost offline.
+ *   3. Ask the app-wide sync queue to flush (no-op while offline).
+ *
+ * Verse ids come from the plan-day response, so marking works offline too.
+ */
+import { useQueryClient, type QueryKey } from '@tanstack/react-query';
+import type { PlanDayView } from '@lectio/types';
+import { enqueue, type QueueOp } from '../lib/offlineQueue';
+import { applyToDay } from '../lib/planDay';
+import { logger } from '../lib/logger';
+import { useSync } from '../components/providers/AuthProvider';
 
 export interface UseVerseReadResult {
-  markChapter: (verseIds: number[]) => void;
-  markRange: (verseIds: number[]) => void;
-  markDayComplete: (verseIds: number[]) => void;
-  isPending: boolean;
+  markRead: (verseIds: number[]) => void;
+  markUnread: (verseIds: number[]) => void;
 }
 
-export function useVerseRead(auth: AuthContext | null): UseVerseReadResult {
+export function useVerseRead(planDayKey: QueryKey | null): UseVerseReadResult {
   const queryClient = useQueryClient();
-  const queryKey = ['verse-reads', authId(auth)] as const;
-  const [isPending, setIsPending] = useState(false);
+  const { flush } = useSync();
 
-  function submit(verseIds: number[]): void {
-    if (!verseIds.length) {
-      logger.info('useVerseRead:submit:empty', 'called with 0 verse IDs — skipping');
-      return;
+  function submit(op: QueueOp, verseIds: number[]): void {
+    if (!verseIds.length) return;
+    logger.action(`reading:${op}`, { verseCount: verseIds.length });
+
+    if (planDayKey) {
+      void queryClient.cancelQueries({ queryKey: planDayKey });
+      queryClient.setQueryData<PlanDayView>(planDayKey, (day) =>
+        day ? applyToDay(day, op, verseIds) : day,
+      );
     }
 
     void (async () => {
-      logger.action('useVerseRead:submit', { verseCount: verseIds.length, online: navigator.onLine });
-      // ── Step 1: Optimistic update ────────────────────────────────────────────
-      await queryClient.cancelQueries({ queryKey: ['progress'] });
-
-      const previousSet = queryClient.getQueryData<Set<number>>(queryKey);
-      const newSet = new Set(previousSet ?? []);
-      verseIds.forEach((id) => newSet.add(id));
-      queryClient.setQueryData(queryKey, newSet);
-
-      // ── Step 2: Always enqueue to IndexedDB ──────────────────────────────────
-      const enqueued = await enqueueVerseReads(verseIds);
-      // enqueued.dropped === true means the queue is full (10k cap).
-      // The optimistic update still happened; the read just won't sync.
-
-      // ── Step 3: If online, call API immediately ───────────────────────────────
-      if (typeof navigator !== 'undefined' && navigator.onLine && auth) {
-        setIsPending(true);
-        try {
-          const result = await markVersesRead(verseIds, auth);
-          logger.action('useVerseRead:api:success', result);
-          if (!enqueued.dropped) {
-            await markSynced([enqueued.id]);
-          }
-        } catch (err) {
-          logger.error('useVerseRead:api:failed', err);
-          // API failed — leave the IndexedDB item unsynced.
-          // useOfflineQueue will retry when connectivity returns.
-        } finally {
-          setIsPending(false);
-        }
-      } else {
-        logger.info('useVerseRead:offline-queue', { dropped: enqueued.dropped });
-      }
-
-      // ── Step 4: Refresh derived queries ──────────────────────────────────────
-      void queryClient.invalidateQueries({ queryKey: ['progress'] });
-      void queryClient.invalidateQueries({ queryKey: ['plan'] });
+      const { dropped } = await enqueue(op, verseIds);
+      if (dropped) logger.error('reading:queue-full', { op, count: verseIds.length });
+      await flush();
     })();
   }
 
   return {
-    markChapter: submit,
-    markRange: submit,
-    markDayComplete: submit,
-    isPending,
+    markRead: (ids) => submit('mark', ids),
+    markUnread: (ids) => submit('unmark', ids),
   };
 }

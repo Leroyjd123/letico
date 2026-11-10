@@ -12,12 +12,12 @@
  * Error message: "that code didn't work — request a new one"
  */
 import { useState, useRef } from 'react';
+import Link from 'next/link';
 import { sendOtp, verifyOtp, migrateGuest } from '../../../lib/api';
 import type { AuthContext } from '../../../lib/api';
 import { getBrowserSupabaseClient } from '../../../lib/supabase';
 import { logger } from '../../../lib/logger';
-
-const GUEST_TOKEN_KEY = 'lectio_guest_token';
+import { getGuestToken, clearGuestToken } from '../../../lib/authStorage';
 
 type Step = 'email' | 'code';
 
@@ -35,7 +35,7 @@ export function LoginPageClient() {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-    logger.action('otp:send', { email });
+    logger.action('otp:send');
     try {
       await sendOtp(email.trim());
       setStep('code');
@@ -54,7 +54,7 @@ export function LoginPageClient() {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-    logger.action('otp:verify', { email });
+    logger.action('otp:verify');
     try {
       const result = await verifyOtp(email.trim(), code.trim());
 
@@ -66,20 +66,24 @@ export function LoginPageClient() {
       });
 
       // Migrate guest progress if a guest token exists
-      const guestToken = localStorage.getItem(GUEST_TOKEN_KEY);
+      const guestToken = getGuestToken();
       if (guestToken) {
         const bearerAuth: AuthContext = { type: 'bearer', token: result.accessToken };
         try {
           const migrationResult = await migrateGuest(guestToken, bearerAuth);
           logger.action('guest:migrate:success', migrationResult);
+          // Only forget the guest once its reads are safely on the account.
+          clearGuestToken();
         } catch (err) {
+          // Keep the guest token: the reads still live on the guest account,
+          // and the migration is retried automatically on the next sign-in
+          // (see useAuth → retryPendingMigration).
           logger.error('guest:migrate:failed', err);
-          // Migration failure is non-fatal — reads remain on the guest account
         }
-        localStorage.removeItem(GUEST_TOKEN_KEY);
       }
 
       logger.action('otp:verify:success');
+      // Full reload on purpose: drops the guest's cached queries.
       window.location.href = '/read';
     } catch (err) {
       logger.error('otp:verify:failed', err);
@@ -236,7 +240,7 @@ export function LoginPageClient() {
       )}
 
       {/* Back to reading link */}
-      <a
+      <Link
         href="/read"
         style={{
           fontFamily: 'var(--font-headline)',
@@ -247,7 +251,7 @@ export function LoginPageClient() {
         }}
       >
         continue without signing in
-      </a>
+      </Link>
     </div>
   );
 }

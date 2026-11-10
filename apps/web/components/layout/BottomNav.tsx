@@ -1,12 +1,13 @@
 'use client';
+
 /**
  * BottomNav.tsx — persistent bottom navigation bar.
  *
- * Three destinations: read · plan · settings
- * Active item is highlighted using CSS custom properties only (no hardcoded hex).
- * Hidden on /login to keep the sign-in screen uncluttered.
- * Glass/blur backdrop effect applied via inline styles.
+ * Uses next/link for client-side navigation: plain <a> tags reloaded the
+ * whole app on every tab change, throwing away the query cache and auth state.
+ * Respects the iPhone home-indicator safe area. Hidden on /login.
  */
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 interface NavItem {
@@ -18,39 +19,37 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: '/read', label: 'read', icon: '◎' },
   { href: '/plan', label: 'plan', icon: '≡' },
-  { href: '/analytics', label: 'analytics', icon: '⊠' },
+  { href: '/analytics', label: 'journey', icon: '⊠' },
   { href: '/settings', label: 'settings', icon: '⊙' },
 ];
 
 const HIDDEN_ON = ['/login'];
 
 export function BottomNav() {
-  const pathname = usePathname();
-
+  const pathname = usePathname() ?? '';
   if (HIDDEN_ON.some((p) => pathname.startsWith(p))) return null;
 
   return (
     <nav
       aria-label="main navigation"
+      className="glass-nav"
       style={{
         position: 'fixed',
         bottom: 0,
         left: 0,
         right: 0,
-        height: '3.5rem',
+        height: 'calc(var(--nav-height) + env(safe-area-inset-bottom, 0px))',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         display: 'flex',
         alignItems: 'stretch',
-        backgroundColor: 'var(--glass-nav-bg)',
-        borderTop: '1px solid var(--color-outline)',
+        boxShadow: 'var(--shadow-floating)',
         zIndex: 50,
       }}
-      className="glass-nav"
     >
       {NAV_ITEMS.map((item) => {
-        const isActive = pathname === item.href || (item.href !== '/read' && pathname.startsWith(item.href));
-
+        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
-          <a
+          <Link
             key={item.href}
             href={item.href}
             aria-current={isActive ? 'page' : undefined}
@@ -68,7 +67,9 @@ export function BottomNav() {
               paddingBottom: '0.25rem',
             }}
           >
-            <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>{item.icon}</span>
+            <span aria-hidden="true" style={{ fontSize: '1.25rem', lineHeight: 1 }}>
+              {item.icon}
+            </span>
             <span
               style={{
                 fontFamily: 'var(--font-headline)',
@@ -79,7 +80,6 @@ export function BottomNav() {
             >
               {item.label}
             </span>
-            {/* Active indicator dot */}
             {isActive && (
               <span
                 aria-hidden="true"
@@ -95,7 +95,7 @@ export function BottomNav() {
                 }}
               />
             )}
-          </a>
+          </Link>
         );
       })}
     </nav>

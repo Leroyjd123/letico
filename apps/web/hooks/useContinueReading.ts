@@ -1,21 +1,25 @@
 'use client';
+
 /**
  * useContinueReading.ts — React Query wrapper for GET /progress/continue.
- * Stale time: 30 seconds. Returns null when the user has finished or has no auth.
+ * `position` is null both while loading and when everything is read, so
+ * callers must check `isLoading` before saying "you've finished".
  */
 import { useQuery } from '@tanstack/react-query';
+import type { ContinuePosition } from '@lectio/types';
 import { getContinuePosition } from '../lib/api';
 import type { AuthContext } from '../lib/api';
-import type { ContinuePosition } from '@lectio/types';
+import { queryKeys } from '../lib/queryKeys';
 
-export function useContinueReading(auth: AuthContext | null): ContinuePosition | null {
-  const { data } = useQuery<ContinuePosition | null>({
-    queryKey: ['progress', 'continue', auth ? (auth.type === 'bearer' ? auth.token.slice(-8) : auth.guestToken.slice(-8)) : 'anon'],
-    queryFn: () => (auth ? getContinuePosition(auth) : Promise.resolve(null)),
+export function useContinueReading(
+  auth: AuthContext | null,
+  userKey: string,
+): { position: ContinuePosition | null; isLoading: boolean; isError: boolean } {
+  const { data, isLoading, isError } = useQuery<ContinuePosition | null>({
+    queryKey: queryKeys.continue(userKey),
+    queryFn: () => getContinuePosition(auth!),
     enabled: auth !== null,
     staleTime: 30_000,
-    retry: false,
   });
-
-  return data ?? null;
+  return { position: data ?? null, isLoading: auth === null || isLoading, isError };
 }

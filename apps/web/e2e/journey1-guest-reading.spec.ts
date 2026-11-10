@@ -14,11 +14,6 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Journey 1 — Guest reading', () => {
-  test.beforeEach(async ({ page }) => {
-    // Clear any leftover guest token from previous tests
-    await page.context().clearCookies();
-    await page.evaluate(() => localStorage.clear());
-  });
 
   test('guest can tap a chapter tile and mark it read', async ({ page }) => {
     await page.goto('/read');
@@ -29,20 +24,25 @@ test.describe('Journey 1 — Guest reading', () => {
       expect(token).toBeTruthy();
     }).toPass({ timeout: 10_000 });
 
-    // Wait for the chapter grid to load
-    await expect(page.locator('[aria-label*="chapter"]').first()).toBeVisible({ timeout: 15_000 });
+    // New guest: every tile starts unread
+    const tile = page.getByRole('button', { name: /, unread\./ }).first();
+    await expect(tile).toBeVisible({ timeout: 15_000 });
+    const name = (await tile.getAttribute('aria-label'))!.split(',')[0]!;
 
-    // Click the first unread chapter tile
-    const firstUnread = page.locator('[aria-label*="unread"]').first();
-    if (await firstUnread.count() > 0) {
-      await firstUnread.click();
-      // After tap the tile should become read
-      await expect(page.locator('[aria-label*="read"]:not([aria-label*="partially"])').first()).toBeVisible({ timeout: 5_000 });
-    }
+    await tile.click();
+    await expect(page.getByRole('button', { name: new RegExp(`^${name}, read\\.`) })).toBeVisible({ timeout: 5_000 });
+
+    // Survives a reload (it reached the server, not just the cache)
+    await page.reload();
+    await expect(page.getByRole('button', { name: new RegExp(`^${name}, read\\.`) })).toBeVisible({ timeout: 15_000 });
+
+    // Tapping again undoes it
+    await page.getByRole('button', { name: new RegExp(`^${name}, read\\.`) }).click();
+    await expect(page.getByRole('button', { name: new RegExp(`^${name}, unread\\.`) })).toBeVisible({ timeout: 5_000 });
   });
 
   test('progress updates after marking chapters read', async ({ page }) => {
     await page.goto('/analytics');
-    await expect(page.getByText(/your reading at a glance/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({ timeout: 10_000 });
   });
 });

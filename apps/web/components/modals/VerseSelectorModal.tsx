@@ -26,6 +26,8 @@ interface VerseSelectorModalProps {
   chapterName: string;
   totalVerses: number;
   readVerseNumbers: Set<number>; // 1-based verse numbers already read
+  /** False while the chapter's verses are still loading — actions disabled */
+  isReady?: boolean;
   onMarkFull: () => void;
   onSaveRange: (startVerse: number, endVerse: number) => void;
   onClose: () => void;
@@ -39,6 +41,7 @@ export function VerseSelectorModal({
   chapterName,
   totalVerses,
   readVerseNumbers,
+  isReady = true,
   onMarkFull,
   onSaveRange,
   onClose,
@@ -236,7 +239,7 @@ export function VerseSelectorModal({
                   letterSpacing: '0.02em',
                 }}
               >
-                the tactile pause · selecting focus
+                choose the verses you read
               </p>
             </div>
             <button
@@ -570,8 +573,11 @@ export function VerseSelectorModal({
           >
             {/* Mark full chapter — left side */}
             <button
+              type="button"
               onClick={handleMarkFull}
+              disabled={!isReady}
               style={{
+                opacity: isReady ? 1 : 0.5,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 'var(--space-2)',
@@ -601,7 +607,7 @@ export function VerseSelectorModal({
               <Button variant="ghost" size="md" onClick={onClose}>
                 cancel
               </Button>
-              <Button variant="primary" size="md" onClick={handleSave}>
+              <Button variant="primary" size="md" onClick={handleSave} disabled={!isReady}>
                 save selection
               </Button>
             </div>

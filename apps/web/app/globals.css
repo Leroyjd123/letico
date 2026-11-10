@@ -22,6 +22,19 @@
   --chapter-unread-border: rgba(77, 97, 79, 0.12);
   --chapter-hover-overlay: rgba(77, 97, 79, 0.08);
   --read-hover-overlay: rgba(27, 28, 26, 0.28);
+  /* Height of the fixed bottom navigation (excluding the safe-area inset) */
+  --nav-height: 3.5rem;
+}
+
+/* Keep page content clear of the fixed bottom nav + home indicator */
+body {
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Visible keyboard focus for every interactive element */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Base typography */

@@ -223,6 +223,25 @@
 
 ---
 
+### [ISSUE-004] Deep review — data loss, session leak and broken reading flow
+
+- **Raised by:** Claude (Claude Code), at the request of the project owner
+- **Date:** 2026-11-10
+- **Problems found and fixed:**
+  - **API ran as the last signed-in user.** `verifyOtp` was called on the shared service-role Supabase client; supabase-js stored the session in memory and used that user's JWT for every later query. OTP now uses a throwaway client (`SupabaseProvider.createAuthClient`).
+  - **1,000-row cap caused data loss.** Reset archived only the first 1,000 reads and then deleted all of them; guest migration copied at most 1,000. Continue-reading, streak, daily counts and export were silently truncated. Replaced by transactional SQL functions in `002_integrity_and_performance.sql`; export paginates.
+  - **Read screen didn't know the day's chapters.** It showed "start chapter + 8", so "mark day complete" marked chapters outside the day and multi-book days lost the second book. Plan-day responses now include every chapter, its verse ids and read state.
+  - **Optimistic updates wrote to a cache key nothing read; offline taps failed** because verse ids were fetched over the network first. Now updates the plan-day query directly; verse ids ship with the day.
+  - **`?day=N` ignored**, so the plan list couldn't open other days. Honoured, plus previous/next navigation.
+  - **Security:** RLS on `archived_verse_reads`; helper functions restricted to `service_role`; DTO validation on auth endpoints; rate limiting; bounded `daily-counts`.
+  - **UTC everywhere:** "today", streak and daily counts now follow the reader's `X-Timezone`.
+  - **Also:** undo (tap a read chapter / `POST /progress/verses/unmark`), offline `readAt`, poison-queue handling, guest token kept until migration succeeds (auto-retry), realtime publication, keyboard-operable tiles, continue pill no longer hidden under the nav, start-date onboarding, empty/duplicate plans removed, web production build fixed.
+- **Tests:** SQL functions run against real Postgres (`pnpm --filter @lectio/api db:test`); API and web unit tests rewritten around behaviour; E2E specs updated to the current UI.
+- **Not done (follow-up):** migrate inline styles to CSS modules and the full DESIGN.md pass; NWT vs KJV versification differences (e.g. verses NWT omits); a PWA/service worker so the app opens offline after a reload.
+- **Status:** Fixed on branch `claude/youthful-maxwell-xd5um0`
+
+---
+
 ### [DISCUSSION-003] Core product philosophy — no gamification, no pressure
 
 - **Raised by:** Leroy Joice Dsouza (human, project owner)
@@ -424,3 +443,4 @@ _Add new agents here when they first contribute to the project._
 | 1.4 | 2026-03-30 | Claude Sonnet 4.6 | Phase 5 complete — OTP sign-in, guest migration, Realtime, BottomNav, 37 tests passing |
 | 1.5 | 2026-04-01 | Claude Sonnet 4.6 | Phase 6 complete — analytics screen, streak, ahead/behind, ProgressGraph, BottomNav analytics tab, 56 tests passing |
 | 1.6 | 2026-04-02 | Claude Sonnet 4.6 | Phase 7 complete — theme system, settings page, error state components, a11y fixes, Storybook 8, Playwright E2E, 75 API tests passing |
+| 1.7 | 2026-11-10 | Claude (Claude Code) | ISSUE-004 — deep review fixes: data loss, session leak, reading flow, security, time zones |

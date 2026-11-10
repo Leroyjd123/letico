@@ -13,9 +13,6 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Journey 2 — Verse selector', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-  });
 
   test('long-press opens verse selector modal', async ({ page }) => {
     await page.goto('/read');

@@ -12,29 +12,24 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useAuthContext } from '../../components/providers/AuthProvider';
-import type { AuthContext } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import { getProgressSummary, getDailyCounts } from '../../lib/api';
 import { StatusCard } from '../../components/analytics/StatusCard';
 import { StatCard } from '../../components/analytics/StatCard';
 import { ProgressGraph } from '../../components/analytics/ProgressGraph';
 
-function authKey(auth: AuthContext | null): string {
-  if (!auth) return 'anon';
-  return auth.type === 'bearer' ? `b:${auth.token.slice(-8)}` : `g:${auth.guestToken.slice(-8)}`;
-}
-
 export function AnalyticsPageClient() {
-  const { auth } = useAuthContext();
+  const { auth, userKey } = useAuthContext();
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ['progress', 'summary', authKey(auth)],
+    queryKey: queryKeys.summary(userKey),
     queryFn: () => getProgressSummary(auth!),
     enabled: auth !== null,
     staleTime: 60_000,
   });
 
   const { data: dailyCounts, isLoading: dailyLoading } = useQuery({
-    queryKey: ['progress', 'daily-counts', 7, authKey(auth)],
+    queryKey: queryKeys.dailyCounts(userKey, 7),
     queryFn: () => getDailyCounts(7, auth!),
     enabled: auth !== null,
     staleTime: 60_000,
@@ -172,8 +167,8 @@ export function AnalyticsPageClient() {
               gap: 'var(--space-3)',
             }}
           >
-            <StatCard label="completed" value={`${summary.completionPct}%`} />
-            <StatCard label="days of reading" value={summary.streakDays} />
+            <StatCard label="of your plan" value={`${Math.round(summary.completionPct)}%`} />
+            <StatCard label="days in a row" value={summary.streakDays} />
             <StatCard label="verses read" value={summary.totalVersesRead} />
           </div>
 

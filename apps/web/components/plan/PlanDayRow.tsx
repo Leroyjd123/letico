@@ -11,6 +11,7 @@
  * Min touch target: 44px height.
  */
 import type { CSSProperties } from 'react';
+import Link from 'next/link';
 import { ProgressBar } from '../ui/ProgressBar';
 
 interface PlanDayRowProps {
@@ -19,7 +20,8 @@ interface PlanDayRowProps {
   completionPct: number;
   isToday: boolean;
   offsetFromToday: number;
-  onClick: () => void;
+  /** Where the row navigates, e.g. /read?day=12 */
+  href: string;
 }
 
 export function PlanDayRow({
@@ -27,7 +29,7 @@ export function PlanDayRow({
   label,
   completionPct,
   isToday,
-  onClick,
+  href,
 }: PlanDayRowProps) {
   const containerStyle: CSSProperties = {
     display: 'flex',
@@ -42,17 +44,18 @@ export function PlanDayRow({
     transition: 'background-color var(--duration-fast) var(--easing-standard)',
     userSelect: 'none',
     WebkitTapHighlightColor: 'transparent',
-    border: 'none',
     width: '100%',
-    textAlign: 'left',
+    textDecoration: 'none',
+    color: 'inherit',
   };
 
   const completionRounded = Math.round(completionPct);
 
   return (
-    <button
+    <Link
+      href={href}
       style={containerStyle}
-      onClick={onClick}
+      aria-current={isToday ? 'date' : undefined}
       aria-label={`day ${dayNumber}, ${label}, ${completionRounded}% complete${isToday ? ', today' : ''}`}
     >
       {/* Day number column */}
@@ -114,6 +117,6 @@ export function PlanDayRow({
       >
         {completionPct >= 100 ? '✓' : completionPct > 0 ? `${completionRounded}%` : '›'}
       </span>
-    </button>
+    </Link>
   );
 }

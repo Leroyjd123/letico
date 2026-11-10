@@ -7,14 +7,16 @@
  *
  * Error handling: all non-2xx responses throw ApiError with a typed code.
  * Never use raw fetch() outside this file.
+ * Every request carries X-Timezone so the API computes "today" locally.
  */
 import type {
   Book,
   Chapter,
   Verse,
   PlanDayView,
-  PlanDayListResponse,
+  PlanDaySummary,
   VerseReadResult,
+  VerseUnreadResult,
   ContinuePosition,
   ProgressSummary,
   GuestUser,
@@ -48,6 +50,39 @@ export type AuthContext =
   | { type: 'bearer'; token: string }
   | { type: 'guest'; guestToken: string };
 
+/** Decodes the `sub` claim of a JWT without verifying it (the API verifies). */
+function jwtSubject(token: string): string | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const sub = (JSON.parse(json) as { sub?: unknown }).sub;
+    return typeof sub === 'string' ? sub : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stable per-user cache key. Survives token refreshes (unlike the token
+ * itself) and differs between accounts and guests.
+ */
+export function userKey(auth: AuthContext | null): string {
+  if (!auth) return 'anon';
+  if (auth.type === 'guest') return `g:${auth.guestToken}`;
+  return `u:${jwtSubject(auth.token) ?? auth.token}`;
+}
+
+/** The reader's IANA time zone, so "today" follows their local calendar. */
+function timeZoneHeader(): Record<string, string> {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz ? { 'X-Timezone': tz } : {};
+  } catch {
+    return {};
+  }
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 const BASE_URL =
@@ -71,6 +106,7 @@ async function request<T>(
     ...fetchOptions,
     headers: {
       'Content-Type': 'application/json',
+      ...timeZoneHeader(),
       ...authHeaders(auth),
       ...(fetchOptions.headers as Record<string, string> | undefined),
     },
@@ -133,17 +169,12 @@ export async function getPlanDay(
   return res.data;
 }
 
-export async function getPlanDays(
+export async function getPlanDaysSummary(
   planId: string,
-  params: { limit?: number; offset?: number },
   auth: AuthContext,
-): Promise<PlanDayListResponse> {
-  const qs = new URLSearchParams();
-  if (params.limit !== undefined) qs.set('limit', String(params.limit));
-  if (params.offset !== undefined) qs.set('offset', String(params.offset));
-  const query = qs.toString() ? `?${qs.toString()}` : '';
-  const res = await request<PlanDayListResponse>(`/plan/${planId}/days${query}`, { auth });
-  return res;
+): Promise<PlanDaySummary[]> {
+  const res = await request<{ data: PlanDaySummary[] }>(`/plan/${planId}/days/summary`, { auth });
+  return res.data;
 }
 
 export async function listPlans(): Promise<PlanListItem[]> {
@@ -153,11 +184,28 @@ export async function listPlans(): Promise<PlanListItem[]> {
 
 // ── Progress endpoints (auth required) ───────────────────────────────────────
 
+/**
+ * @param readAt when the reading happened (offline queue). The server clamps
+ *               it to the last 30 days.
+ */
 export async function markVersesRead(
   verseIds: number[],
   auth: AuthContext,
+  readAt?: string,
 ): Promise<VerseReadResult> {
   const res = await request<{ data: VerseReadResult }>('/progress/verses', {
+    method: 'POST',
+    body: JSON.stringify(readAt ? { verseIds, readAt } : { verseIds }),
+    auth,
+  });
+  return res.data;
+}
+
+export async function unmarkVersesRead(
+  verseIds: number[],
+  auth: AuthContext,
+): Promise<VerseUnreadResult> {
+  const res = await request<{ data: VerseUnreadResult }>('/progress/verses/unmark', {
     method: 'POST',
     body: JSON.stringify({ verseIds }),
     auth,
@@ -166,13 +214,8 @@ export async function markVersesRead(
 }
 
 export async function getContinuePosition(auth: AuthContext): Promise<ContinuePosition | null> {
-  try {
-    const res = await request<{ data: ContinuePosition }>('/progress/continue', { auth });
-    return res.data;
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return null;
-    throw err;
-  }
+  const res = await request<{ data: ContinuePosition | null }>('/progress/continue', { auth });
+  return res.data;
 }
 
 export async function getProgressSummary(auth: AuthContext): Promise<ProgressSummary> {
@@ -241,7 +284,7 @@ export async function getMe(auth: AuthContext): Promise<MeResult> {
 }
 
 export async function updateUser(
-  dto: { planId?: string; planStartDate?: string },
+  dto: { planId?: string; planStartDate?: string | null },
   auth: AuthContext,
 ): Promise<UpdateUserResult> {
   const res = await request<{ data: UpdateUserResult }>('/users/me', {

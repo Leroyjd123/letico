@@ -9,7 +9,7 @@ A quiet, guilt-free Bible reading companion. Lectio tracks your reading progress
 - Shows today's daily reading passage (Genesis to Revelation in 365 days)
 - Tap a chapter tile to mark it read; long-press to select a specific verse range
 - Opens the passage directly in jw.org with one tap
-- Tracks progress without pressure — no streaks, no leaderboards
+- Tracks progress without pressure — a quiet "days in a row" count, no badges, no leaderboards
 - Works offline: reads queue to IndexedDB and sync on reconnect
 - Guest mode: no sign-up required to start reading
 
@@ -55,7 +55,8 @@ lectio/
 │   └── tsconfig/                   # Shared TypeScript config
 └── apps/api/supabase/
     └── migrations/
-        └── 001_initial_schema.sql  # Run this once in Supabase SQL editor
+        ├── 001_initial_schema.sql              # Run once in the Supabase SQL editor
+        └── 002_integrity_and_performance.sql   # Then run this (safe to re-run)
 ```
 
 ---
@@ -141,43 +142,30 @@ FRONTEND_URL=http://localhost:3000
 
 ---
 
-### Step 4 — Run the database migration
+### Step 4 — Run the database migrations
 
-In the Supabase dashboard, go to **SQL Editor → New query**, paste the entire contents of this file, and click **Run**:
+In the Supabase dashboard, go to **SQL Editor → New query**, paste the entire contents of each file **in order**, and click **Run**:
 
 ```
 apps/api/supabase/migrations/001_initial_schema.sql
+apps/api/supabase/migrations/002_integrity_and_performance.sql
 ```
 
-This creates all tables: `books`, `chapters`, `verses`, `plans`, `plan_days`, `verse_reads`, `users`.
+`001` creates the tables and the `count_verses_read_in_range` function.
+`002` adds the SQL functions the API depends on (atomic reset and guest
+migration, plan summaries, streaks, daily counts), row-level security on
+`archived_verse_reads`, locks helper functions to `service_role`, and enables
+Realtime on `verse_reads`. `002` is idempotent, so re-running it is safe.
 
-**Also run this SQL** to create the RPC function used by the plan summary endpoint:
-
-```sql
-create or replace function count_verses_read_in_range(
-  p_user_id uuid,
-  p_start_global_order int,
-  p_end_global_order int
-)
-returns int
-language sql
-stable
-as $$
-  select count(*)::int
-  from verse_reads vr
-  join verses v on v.id = vr.verse_id
-  where vr.user_id = p_user_id
-    and v.global_order >= p_start_global_order
-    and v.global_order <= p_end_global_order
-$$;
-```
+> Upgrading an existing database? Just run `002`. It also marks the default
+> plan and moves anyone on an empty plan back to it.
 
 ---
 
 ### Step 5 — Seed the database
 
 ```bash
-# Seed: 66 books, 1,189 chapters, 31,102 KJV verses, 3 plans, 365 plan days
+# Seed: 66 books, 1,189 chapters, 31,102 KJV verses, the 1 year plan, 365 plan days (safe to re-run)
 pnpm --filter @lectio/api db:seed
 
 # Verify: should print "6/6 checks passed"
@@ -217,8 +205,14 @@ pnpm --filter @lectio/web dev    # Web  →  http://localhost:3000
 
 ```bash
 pnpm test                          # All packages
-pnpm --filter @lectio/api test     # API unit tests only  (22 tests)
-pnpm --filter @lectio/web test     # Web unit tests only  (49 tests)
+pnpm --filter @lectio/api test     # API unit tests
+pnpm --filter @lectio/web test     # Web unit tests
+
+# SQL functions against a real, THROWAWAY Postgres (the database is wiped):
+DATABASE_URL=postgres://postgres@localhost:5432/lectio_test pnpm --filter @lectio/api db:test
+
+# End-to-end journeys (needs the API + a Supabase test project running)
+pnpm --filter @lectio/web test:e2e -- --trace off
 ```
 
 ---
@@ -237,8 +231,11 @@ Your `.env` credentials may be wrong. Double-check `SUPABASE_URL` and `SUPABASE_
 **API starts but `/api/plan/today` returns 401**
 The endpoint requires auth. Use `POST /api/auth/guest` first to get a guest token, then pass it as `X-Guest-Token: <token>` on subsequent requests.
 
-**`GET /plan/:planId/days/summary` returns 500**
-The `count_verses_read_in_range` RPC function from Step 4 was not created. Run that SQL block in the Supabase SQL editor.
+**Plan, progress or migration endpoints return 500 mentioning a missing function**
+Migration `002_integrity_and_performance.sql` has not been run. Run it in the Supabase SQL editor.
+
+**"Today" is off by a day**
+The web app sends the reader's time zone in the `X-Timezone` header and the API computes "today" in that zone. If you call the API directly without it, UTC is used.
 
 **Next.js shows a blank page or CSS tokens are missing**
 The `:root` token injection happens in `apps/web/app/layout.tsx`. Check the browser console for JavaScript errors. Make sure `NEXT_PUBLIC_API_BASE_URL` points to `http://localhost:4000/api`.
@@ -260,32 +257,48 @@ The `:root` token injection happens in `apps/web/app/layout.tsx`. Check the brow
 
 | Method | Path | Description |
 | --- | --- | --- |
-| POST | `/api/auth/guest` | Create an anonymous guest session; returns `{ guestToken }` |
-| GET | `/api/auth/me` | Resolve current user → `{ id, planId }` (requires auth) |
+| POST | `/api/auth/guest` | Create an anonymous guest session; returns `{ guestToken }` (10/min per IP) |
+| GET | `/api/auth/me` | Current user → `{ id, planId, planStartDate }` (requires auth) |
+| POST | `/api/auth/otp/send` | Email a sign-in code (5/min per IP) |
+| POST | `/api/auth/otp/verify` | Exchange the code for a session |
+| POST | `/api/auth/migrate` | Move a guest's reading to the signed-in account (atomic, idempotent) |
+
+### Users (auth required)
+
+| Method | Path | Description |
+| --- | --- | --- |
+| PATCH | `/api/users/me` | Set `planId` and/or `planStartDate` (`null` clears it) |
 
 ### Plan (auth required — Bearer JWT or `X-Guest-Token` header)
 
 | Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/plan/today` | Today's reading day for the authenticated user |
-| GET | `/api/plan/:planId/day/:dayNumber` | Specific plan day details |
-| GET | `/api/plan/:planId/days/summary` | Completion % for all 365 days |
+| GET | `/api/plan/list` | Plans that have days (public) |
+| GET | `/api/plan/today` | Today's reading day (in the reader's time zone) |
+| GET | `/api/plan/:planId/day/:dayNumber` | A plan day: every chapter across book boundaries, its verse ids and which are read |
+| GET | `/api/plan/:planId/days/summary` | Completion % for every day, in one query |
 
 ### Progress (auth required)
 
 | Method | Path | Description |
 | --- | --- | --- |
-| POST | `/api/progress/verses` | Mark verses read — the **only** write path |
-| GET | `/api/progress/continue` | First unread verse position in the user's plan |
-| GET | `/api/progress/summary` | Aggregate reading stats |
+| POST | `/api/progress/verses` | Mark verses read (`{ verseIds, readAt? }`; `readAt` clamped to the last 30 days) |
+| POST | `/api/progress/verses/unmark` | Mark verses unread again (undo) |
+| GET | `/api/progress/continue` | First unread verse in the user's plan |
+| GET | `/api/progress/summary` | Completion of the plan, days in a row, ahead/behind |
+| GET | `/api/progress/daily-counts?days=N` | Verses read per local day (N = 1–366) |
 | GET | `/api/progress/reads` | Read verse IDs within a given verse range |
+| POST | `/api/progress/reset` | Archive and clear all reading (atomic) |
+| GET | `/api/progress/export` | Full reading history as JSON |
 
 ### Auth modes
 
 Both are resolved automatically by `AuthGuard`:
 
-- **Bearer JWT** — `Authorization: Bearer <token>` — Supabase session token (Phase 5, not yet active)
+- **Bearer JWT** — `Authorization: Bearer <token>` — Supabase session token
 - **Guest token** — `X-Guest-Token: <uuid>` — stored in `localStorage`, no sign-up required
+
+Optional on every request: `X-Timezone: <IANA zone>` (e.g. `Asia/Kolkata`) so "today", streaks and daily counts follow the reader's calendar.
 
 ---
 
@@ -293,7 +306,9 @@ Both are resolved automatically by `AuthGuard`:
 
 - **`verse_reads` is the only source of truth.** Completion %, progress bars, and summaries are all computed at query time — nothing derived is ever stored in the database.
 - **`global_order` never appears in API responses.** It's an internal integer used for range arithmetic in SQL. All API responses use `verse_id`.
-- **All progress writes go through `POST /api/progress/verses`.** Every insert uses `{ onConflict: 'user_id,verse_id', ignoreDuplicates: true }` — duplicate reads are silently ignored.
+- **All progress writes go through `/api/progress/verses` (and `/unmark`).** Every insert uses `{ onConflict: 'user_id,verse_id', ignoreDuplicates: true }` — duplicate reads are silently ignored.
+- **Nothing loads a user's whole history into Node.** PostgREST caps queries at 1,000 rows, so bulk work (reset, guest migration, summaries, streaks) runs in SQL functions in a single transaction.
+- **Sign-in never touches the shared Supabase client.** OTP calls use a throwaway client; otherwise supabase-js would make every later API query run as that user.
 - **CSS tokens only.** No hardcoded hex values anywhere in the UI. Every colour, spacing value, and radius references a CSS custom property.
 - **Controllers are routing-only.** All business logic lives in NestJS services, never in controllers.
 
@@ -306,9 +321,10 @@ Both are resolved automatically by `AuthGuard`:
 | 1 — Foundation | ✅ Complete | Monorepo, DB schema, Bible seed, API, design system |
 | 2 — Reading & Progress | ✅ Complete | Plan API, progress API, auth guard, reading screen UI |
 | 3 — Plan View | ✅ Complete | 365-day plan list, /auth/me, days/summary endpoint |
-| 4 — Guest Mode & Offline | 🔜 Next | IndexedDB queue, offline sync, optimistic UI |
-| 5 — Auth & Migration | 🔜 | OTP email login, guest → user migration |
-| 6 — Analytics | 🔜 | Streak, ahead/behind, completion chart |
-| 7 — Polish | 🔜 | Accessibility, performance, PWA |
+| 4 — Guest Mode & Offline | ✅ Complete | IndexedDB queue, offline sync, optimistic UI |
+| 5 — Auth & Migration | ✅ Complete | OTP email login, guest → user migration |
+| 6 — Analytics | ✅ Complete | Days in a row, ahead/behind, completion chart |
+| 7 — Polish | ✅ Complete | Theme, settings, accessibility |
+| Review fixes | ✅ Complete | See 12_PROGRESS_LOG.md — data-loss, security and reading-flow fixes |
 
 See [12_PROGRESS_LOG.md](./12_PROGRESS_LOG.md) for the live task-by-task changelog with agent attribution.

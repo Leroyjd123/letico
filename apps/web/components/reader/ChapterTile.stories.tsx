@@ -13,4 +13,3 @@ type Story = StoryObj<typeof ChapterTile>;
 export const Read: Story = { args: { readState: 'read' } };
 export const Partial: Story = { args: { readState: 'partial' } };
 export const Unread: Story = { args: { readState: 'unread' } };
-export const Locked: Story = { args: { readState: 'locked' } };

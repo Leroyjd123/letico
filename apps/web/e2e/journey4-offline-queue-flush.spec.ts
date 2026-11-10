@@ -14,9 +14,6 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Journey 4 — Offline queue', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-  });
 
   test('offline reads show optimistically and sync when online', async ({ page, context }) => {
     await page.goto('/read');

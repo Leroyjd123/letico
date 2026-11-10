@@ -9,19 +9,16 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Journey 3 — Mark day complete', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-  });
 
   test('mark day complete shows success state', async ({ page }) => {
     await page.goto('/read');
-    // Wait for TodayCard to load
-    await expect(page.locator('button').filter({ hasText: /mark day/i }).or(page.locator('button').filter({ hasText: /complete/i }))).toBeVisible({ timeout: 15_000 });
-
-    const markBtn = page.locator('button').filter({ hasText: /mark/i }).first();
+    const markBtn = page.getByRole('button', { name: /mark day \d+ complete/i });
+    await expect(markBtn).toBeVisible({ timeout: 15_000 });
     await markBtn.click();
 
-    // Success state — look for completion indicator
-    await expect(page.locator('[aria-label*="complete"], [aria-label*="finished"], [data-state="complete"]').or(page.locator('text=/complete|finished/i'))).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByText(/day \d+ complete/i)).toBeVisible({ timeout: 8_000 });
+    await expect(page.getByRole('progressbar', { name: '100% complete' })).toBeVisible();
+    // Every tile of the day is read, and none is left unread
+    await expect(page.getByRole('button', { name: /, unread\./ })).toHaveCount(0);
   });
 });

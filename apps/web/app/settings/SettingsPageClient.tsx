@@ -28,9 +28,10 @@ import {
   exportProgress,
 } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
+import { queryKeys } from '../../lib/queryKeys';
+import { clearGuestToken } from '../../lib/authStorage';
 import type { Theme } from '../../hooks/useTheme';
 
-const GUEST_TOKEN_KEY = 'lectio_guest_token';
 
 // ── Shared style tokens ───────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ const actionBtnStyle: React.CSSProperties = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function SettingsPageClient() {
-  const { auth, isProvisioning } = useAuthContext();
+  const { auth, userKey, isProvisioning } = useAuthContext();
   const { theme, setTheme } = useTheme();
   const queryClient = useQueryClient();
 
@@ -91,7 +92,9 @@ export function SettingsPageClient() {
     try {
       const supabase = getBrowserSupabaseClient();
       await supabase.auth.signOut();
-      localStorage.removeItem(GUEST_TOKEN_KEY);
+      clearGuestToken();
+      queryClient.clear();
+      // Full reload on purpose: provisions a fresh guest with a clean slate.
       window.location.href = '/read';
     } catch {
       setIsSigningOut(false);
@@ -100,23 +103,26 @@ export function SettingsPageClient() {
 
   // ── Fetch user profile (planId, planStartDate) ────────────────────────────
   const { data: me } = useQuery({
-    queryKey: ['me', auth],
+    queryKey: queryKeys.me(userKey),
     queryFn: () => getMe(auth!),
     enabled: !!auth,
   });
 
   // ── Fetch available plans ─────────────────────────────────────────────────
   const { data: plans = [], isLoading: plansLoading } = useQuery({
-    queryKey: ['plans', 'list'],
+    queryKey: queryKeys.plans(),
     queryFn: () => listPlans(),
   });
 
   // ── Update user mutation (plan / start date) ──────────────────────────────
   const updateUserMutation = useMutation({
-    mutationFn: (dto: { planId?: string; planStartDate?: string }) =>
+    mutationFn: (dto: { planId?: string; planStartDate?: string | null }) =>
       updateUser(dto, auth!),
     onSuccess: () => {
+      // Plan or start date changes what "today" is and every day's offset.
       void queryClient.invalidateQueries({ queryKey: ['me'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
+      void queryClient.invalidateQueries({ queryKey: ['progress'] });
     },
   });
 
@@ -131,9 +137,12 @@ export function SettingsPageClient() {
       setResetFlash(`${result.archivedCount} verses archived`);
       setTimeout(() => setResetFlash(null), 3000);
       void queryClient.invalidateQueries({ queryKey: ['progress'] });
+      void queryClient.invalidateQueries({ queryKey: ['plan'] });
     },
     onError: () => {
       setResetConfirm(false);
+      setResetFlash("reset didn't go through — nothing was changed");
+      setTimeout(() => setResetFlash(null), 4000);
     },
   });
 
@@ -147,10 +156,12 @@ export function SettingsPageClient() {
 
   // ── Export data ───────────────────────────────────────────────────────────
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState(false);
 
   async function handleExport() {
     if (!auth || isExporting) return;
     setIsExporting(true);
+    setExportError(false);
     try {
       const data = await exportProgress(auth);
       const json = JSON.stringify(data, null, 2);
@@ -163,6 +174,8 @@ export function SettingsPageClient() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    } catch {
+      setExportError(true);
     } finally {
       setIsExporting(false);
     }
@@ -357,6 +370,12 @@ export function SettingsPageClient() {
         </div>
       </section>
 
+      {updateUserMutation.isError && (
+        <p role="status" style={{ ...mutedStyle, fontSize: '0.8125rem', padding: '0 var(--space-6)' }}>
+          that change didn&apos;t save — try again
+        </p>
+      )}
+
       {/* ── Appearance ──────────────────────────────────────────────────────── */}
       <section style={{ marginTop: 'var(--space-6)' }}>
         <p style={sectionHeadingStyle}>appearance</p>
@@ -449,6 +468,13 @@ export function SettingsPageClient() {
               {isExporting ? 'exporting…' : 'export json'}
             </button>
           </div>
+          {exportError && (
+            <div style={rowStyle} role="status">
+              <span style={{ ...mutedStyle, fontSize: '0.8125rem' }}>
+                export didn&apos;t work — check your connection and try again
+              </span>
+            </div>
+          )}
         </section>
       )}
 

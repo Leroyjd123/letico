@@ -14,9 +14,6 @@ const TEST_EMAIL = process.env['E2E_TEST_EMAIL'];
 test.describe('Journey 5 — OTP sign-in', () => {
   test.skip(!TEST_EMAIL, 'E2E_TEST_EMAIL not set — skipping OTP test');
 
-  test.beforeEach(async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-  });
 
   test('guest progress migrates after OTP sign-in', async ({ page }) => {
     // Step 1: Create guest progress

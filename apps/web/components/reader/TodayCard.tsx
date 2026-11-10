@@ -2,28 +2,52 @@
 /**
  * TodayCard.tsx
  *
- * Shows the day label, progress bar, and mark-day-complete button.
+ * Shows the day label, progress bar, mark-day-complete button, and
+ * previous/next day navigation (any day can be read ahead or backfilled).
  * On completion: button → check icon + "day N complete" text.
  * Transition is opacity 200ms only — no bounce, no spring.
  * All colours via CSS custom properties.
  */
 import { type CSSProperties } from 'react';
+import Link from 'next/link';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Button } from '../ui/Button';
 
 interface TodayCardProps {
   dayNumber: number;
+  totalDays: number;
   label: string;
   completionPct: number;
   isComplete: boolean;
+  isToday: boolean;
+  /** href builder for another day, e.g. n => `/read?day=${n}` */
+  dayHref: (dayNumber: number) => string;
+  todayHref: string;
   onMarkDayComplete: () => void;
 }
 
+const navLinkStyle: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '2.75rem',
+  minHeight: '2.75rem',
+  borderRadius: 'var(--radius-full)',
+  color: 'var(--color-text-secondary)',
+  textDecoration: 'none',
+  fontFamily: 'var(--font-headline)',
+  fontSize: '1.125rem',
+};
+
 export function TodayCard({
   dayNumber,
+  totalDays,
   label,
   completionPct,
   isComplete,
+  isToday,
+  dayHref,
+  todayHref,
   onMarkDayComplete,
 }: TodayCardProps) {
   const cardStyle: CSSProperties = {
@@ -75,7 +99,7 @@ export function TodayCard({
               marginBottom: 'var(--space-1)',
             }}
           >
-            today&apos;s focus
+            {isToday ? <>today&apos;s focus</> : 'reading'}
           </p>
           <p
             style={{
@@ -87,7 +111,15 @@ export function TodayCard({
               marginBottom: 'var(--space-1)',
             }}
           >
-            day {dayNumber}
+            day {dayNumber} of {totalDays}
+            {!isToday && (
+              <>
+                {' · '}
+                <Link href={todayHref} style={{ color: 'var(--color-primary)' }}>
+                  back to today
+                </Link>
+              </>
+            )}
           </p>
           <h2
             style={{
@@ -103,6 +135,19 @@ export function TodayCard({
             {label}
           </h2>
         </div>
+        {/* Previous / next day */}
+        <nav aria-label="change day" style={{ display: 'flex', flexShrink: 0, marginTop: 'calc(-1 * var(--space-2))', marginRight: 'calc(-1 * var(--space-2))' }}>
+          {dayNumber > 1 && (
+            <Link href={dayHref(dayNumber - 1)} style={navLinkStyle} aria-label={`previous day (day ${dayNumber - 1})`}>
+              ‹
+            </Link>
+          )}
+          {dayNumber < totalDays && (
+            <Link href={dayHref(dayNumber + 1)} style={navLinkStyle} aria-label={`next day (day ${dayNumber + 1})`}>
+              ›
+            </Link>
+          )}
+        </nav>
       </div>
 
       {/* Progress bar */}

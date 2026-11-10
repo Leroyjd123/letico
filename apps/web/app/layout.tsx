@@ -9,7 +9,7 @@
  * - Wrap children in AuthProvider for auth state + Realtime sync
  * - Render BottomNav (client component — hides itself on /login)
  */
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Manrope, Inter } from 'next/font/google';
 import { buildCssTokenString } from '@lectio/types/tokens';
 import { QueryProvider } from '../components/providers/QueryProvider';
@@ -31,6 +31,13 @@ const inter = Inter({
   display: 'swap',
   weight: ['300', '400', '500'],
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // Lets env(safe-area-inset-*) work on notched phones.
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: 'lectio',
@@ -61,7 +68,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body style={{ paddingBottom: '3.5rem' }}>
+      <body>
         <NetworkBanner />
         <QueryProvider>
           <AuthProvider>

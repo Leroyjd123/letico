@@ -2,89 +2,65 @@
 /**
  * PlanPageClient.tsx
  *
- * Renders the full 365-day plan list.
+ * Renders every day of the reader's plan.
  *
  * Data flow:
  *   1. useAuthContext() → AuthContext
  *   2. GET /api/auth/me → { planId } — the user's active reading plan
  *   3. GET /api/plan/:planId/days/summary → Array<DaySummary> (completion for all 365 days)
  *   4. Scrolls to today's row on first render via a ref
- *   5. Tapping any row → navigates to /read with ?day=N
+ *   5. Tapping any row → client-side navigation to /read?day=N
  *
  * No locked days, no disabled states. R2: all days freely navigable.
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { MeResult, PlanDaySummary, PlanListItem } from '@lectio/types';
 import { useAuthContext } from '../../components/providers/AuthProvider';
-import type { AuthContext } from '../../lib/api';
+import { getMe, getPlanDaysSummary, listPlans } from '../../lib/api';
+import { queryKeys } from '../../lib/queryKeys';
 import { PlanDayRow } from '../../components/plan/PlanDayRow';
-
-const BASE_URL =
-  (typeof process !== 'undefined' ? process.env['NEXT_PUBLIC_API_BASE_URL'] : undefined) ??
-  'http://localhost:4000/api';
-
-interface DaySummary {
-  dayNumber: number;
-  label: string;
-  completionPct: number;
-  isToday: boolean;
-  offsetFromToday: number;
-}
-
-function headers(auth: AuthContext): Record<string, string> {
-  if (auth.type === 'bearer') return { Authorization: `Bearer ${auth.token}` };
-  return { 'X-Guest-Token': auth.guestToken };
-}
-
-async function fetchMe(auth: AuthContext): Promise<{ id: string; planId: string | null }> {
-  const res = await fetch(`${BASE_URL}/auth/me`, { headers: headers(auth) });
-  if (!res.ok) return { id: '', planId: null };
-  const json = (await res.json()) as { data: { id: string; planId: string | null } };
-  return json.data;
-}
-
-async function fetchDaysSummary(planId: string, auth: AuthContext): Promise<DaySummary[]> {
-  const res = await fetch(`${BASE_URL}/plan/${planId}/days/summary`, { headers: headers(auth) });
-  if (!res.ok) return [];
-  const json = (await res.json()) as { data: DaySummary[] };
-  return json.data;
-}
-
-function authKey(auth: AuthContext | null): string {
-  if (!auth) return 'anon';
-  return auth.type === 'bearer' ? `b:${auth.token.slice(-8)}` : `g:${auth.guestToken.slice(-8)}`;
-}
+import { Button } from '../../components/ui/Button';
 
 export function PlanPageClient() {
-  const { auth } = useAuthContext();
+  const { auth, userKey } = useAuthContext();
   const todayRowRef = useRef<HTMLDivElement | null>(null);
+  const didScroll = useRef(false);
 
   // ── Resolve user's planId ─────────────────────────────────────────────────
-  const { data: me } = useQuery({
-    queryKey: ['auth', 'me', authKey(auth)],
-    queryFn: () => fetchMe(auth!),
+  const { data: me } = useQuery<MeResult>({
+    queryKey: queryKeys.me(userKey),
+    queryFn: () => getMe(auth!),
     enabled: auth !== null,
-    staleTime: 10 * 60_000,
+    staleTime: 5 * 60_000,
   });
 
-  // ── Fetch all 365 days' completion in one call ────────────────────────────
-  const { data: days, isLoading: daysLoading } = useQuery<DaySummary[]>({
-    queryKey: ['plan', 'all-days', me?.planId, authKey(auth)],
-    queryFn: () => fetchDaysSummary(me!.planId!, auth!),
+  const { data: plans } = useQuery<PlanListItem[]>({
+    queryKey: queryKeys.plans(),
+    queryFn: listPlans,
+    staleTime: 60 * 60_000,
+  });
+  const plan = plans?.find((p) => p.id === me?.planId);
+
+  // ── Every day's completion in one call ────────────────────────────────────
+  const {
+    data: days,
+    isLoading: daysLoading,
+    isError,
+    refetch,
+  } = useQuery<PlanDaySummary[]>({
+    queryKey: queryKeys.planSummary(userKey, me?.planId ?? ''),
+    queryFn: () => getPlanDaysSummary(me!.planId!, auth!),
     enabled: auth !== null && !!me?.planId,
     staleTime: 2 * 60_000,
   });
 
-  // ── Scroll today into view on first render ────────────────────────────────
+  // ── Scroll today into view once (not on every background refetch) ────────
   useEffect(() => {
-    if (todayRowRef.current) {
-      todayRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    if (didScroll.current || !todayRowRef.current) return;
+    didScroll.current = true;
+    todayRowRef.current.scrollIntoView({ block: 'center' });
   }, [days]);
-
-  const handleDayClick = useCallback((dayNumber: number) => {
-    window.location.href = `/read?day=${dayNumber}`;
-  }, []);
 
   // ── Auth loading ──────────────────────────────────────────────────────────
   if (auth === null) {
@@ -97,7 +73,7 @@ export function PlanPageClient() {
     );
   }
 
-  const isLoading = daysLoading || !me;
+  const isLoading = !isError && (daysLoading || !me);
 
   return (
     <div style={{ maxWidth: '36rem', margin: '0 auto', paddingBottom: 'var(--space-16)' }}>
@@ -109,7 +85,6 @@ export function PlanPageClient() {
           top: 0,
           backgroundColor: 'var(--color-bg-page)',
           zIndex: 10,
-          borderBottom: '1px solid var(--color-outline)',
         }}
       >
         <h1
@@ -133,7 +108,7 @@ export function PlanPageClient() {
             margin: 'var(--space-1) 0 0',
           }}
         >
-          1 year · genesis to revelation
+          {plan ? `${plan.name} · ${plan.totalDays} days` : '\u00a0'}
         </p>
       </div>
 
@@ -167,26 +142,27 @@ export function PlanPageClient() {
                 completionPct={day.completionPct}
                 isToday={day.isToday}
                 offsetFromToday={day.offsetFromToday}
-                onClick={() => handleDayClick(day.dayNumber)}
+                href={day.isToday ? '/read' : `/read?day=${day.dayNumber}`}
               />
-              {!day.isToday && (
-                <div
-                  aria-hidden="true"
-                  style={{
-                    height: '1px',
-                    margin: '0 var(--space-5)',
-                    backgroundColor: 'var(--color-outline)',
-                    opacity: 0.4,
-                  }}
-                />
-              )}
             </div>
           ))}
         </div>
       )}
 
+      {/* Error state */}
+      {isError && (
+        <div style={{ padding: 'var(--space-10) var(--space-6)', textAlign: 'center', display: 'grid', gap: 'var(--space-4)', justifyItems: 'center' }}>
+          <p style={{ fontFamily: 'var(--font-headline)', fontSize: '0.9375rem', color: 'var(--color-text-muted)', textTransform: 'lowercase' }}>
+            your plan couldn&apos;t load
+          </p>
+          <Button variant="ghost" size="md" onClick={() => void refetch()}>
+            try again
+          </Button>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!isLoading && (!days || days.length === 0) && (
+      {!isLoading && !isError && (!days || days.length === 0) && (
         <div style={{ padding: 'var(--space-10) var(--space-6)', textAlign: 'center' }}>
           <p style={{ fontFamily: 'var(--font-headline)', fontSize: '0.9375rem', color: 'var(--color-text-muted)', textTransform: 'lowercase' }}>
             your plan will appear here once you start reading

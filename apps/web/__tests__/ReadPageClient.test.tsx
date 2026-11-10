@@ -1,127 +1,170 @@
-'use client';
-
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { PlanDayView } from '@lectio/types';
 import { ReadPageClient } from '../app/read/ReadPageClient';
 
-const mockUseQuery = jest.fn();
-const mockUseAuthContext = jest.fn();
-const mockUseOfflineQueue = jest.fn();
-const mockUseVerseRead = jest.fn();
-const mockUseContinueReading = jest.fn();
-
-jest.mock('@tanstack/react-query', () => ({
-  useQuery: (options: unknown) => mockUseQuery(options),
+// ── Network + platform mocks (everything else is real) ──────────────────────
+const api = {
+  getMe: jest.fn(),
+  getPlanToday: jest.fn(),
+  getPlanDay: jest.fn(),
+  updateUser: jest.fn(),
+  getContinuePosition: jest.fn(),
+};
+jest.mock('../lib/api', () => ({
+  getMe: (...a: unknown[]) => api.getMe(...a),
+  getPlanToday: (...a: unknown[]) => api.getPlanToday(...a),
+  getPlanDay: (...a: unknown[]) => api.getPlanDay(...a),
+  updateUser: (...a: unknown[]) => api.updateUser(...a),
+  getContinuePosition: (...a: unknown[]) => api.getContinuePosition(...a),
 }));
 
+const enqueue = jest.fn().mockResolvedValue({ id: 1, dropped: false });
+jest.mock('../lib/offlineQueue', () => ({ enqueue: (...a: unknown[]) => enqueue(...a) }));
+
+const flush = jest.fn().mockResolvedValue(undefined);
+const auth = { type: 'guest' as const, guestToken: 'guest-1' };
 jest.mock('../components/providers/AuthProvider', () => ({
-  useAuthContext: () => mockUseAuthContext(),
+  useAuthContext: () => ({
+    auth,
+    userKey: 'g:guest-1',
+    isProvisioning: false,
+    provisionFailed: false,
+    retryProvision: jest.fn(),
+  }),
+  useSync: () => ({ hasPermanentFailure: false, flush }),
 }));
 
-jest.mock('../hooks/useOfflineQueue', () => ({
-  useOfflineQueue: (...args: unknown[]) => mockUseOfflineQueue(...args),
-}));
+let search = new URLSearchParams();
+jest.mock('next/navigation', () => ({ useSearchParams: () => search }));
 
-jest.mock('../hooks/useVerseRead', () => ({
-  useVerseRead: (...args: unknown[]) => mockUseVerseRead(...args),
-}));
+// ── Fixture: a day that crosses a book boundary ─────────────────────────────
+function crossBookDay(overrides: Partial<PlanDayView> = {}): PlanDayView {
+  return {
+    planId: 'plan-1',
+    dayNumber: 52,
+    totalDays: 365,
+    label: 'deuteronomy 34 · matthew 1',
+    book: 'DEU',
+    chapter: 34,
+    startVerse: 1,
+    endVerse: 3,
+    startVerseId: 100,
+    endVerseId: 105,
+    totalVerses: 6,
+    versesRead: 3,
+    isToday: true,
+    offsetFromToday: 0,
+    chapters: [
+      { chapterId: 34, chapterNumber: 34, book: 'DEU', bookName: 'Deuteronomy',
+        verseIds: [100, 101, 102], verseNumbers: [1, 2, 3], readVerseIds: [100, 101, 102] },
+      { chapterId: 900, chapterNumber: 1, book: 'MAT', bookName: 'Matthew',
+        verseIds: [103, 104, 105], verseNumbers: [1, 2, 3], readVerseIds: [] },
+    ],
+    ...overrides,
+  };
+}
 
-jest.mock('../hooks/useContinueReading', () => ({
-  useContinueReading: (...args: unknown[]) => mockUseContinueReading(...args),
-}));
+function renderPage() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <ReadPageClient />
+    </QueryClientProvider>,
+  );
+}
 
-jest.mock('../components/reader/TodayCard', () => ({
-  TodayCard: () => <div>today card</div>,
-}));
-
-jest.mock('../components/reader/ChapterGrid', () => ({
-  ChapterGrid: () => <div>chapter grid</div>,
-}));
-
-jest.mock('../components/modals/VerseSelectorModal', () => ({
-  VerseSelectorModal: () => <div>verse modal</div>,
-}));
-
-jest.mock('../components/reader/OpenInJWButton', () => ({
-  OpenInJWButton: () => <div>open jw</div>,
-}));
-
-jest.mock('../components/reader/ContinuePill', () => ({
-  ContinuePill: () => null,
-}));
-
-jest.mock('../components/reader/GuestBackupNudge', () => ({
-  GuestBackupNudge: () => <div>guest backup</div>,
-  shouldShowNudge: () => false,
-}));
+beforeEach(() => {
+  jest.clearAllMocks();
+  search = new URLSearchParams();
+  api.getMe.mockResolvedValue({ id: 'u', planId: 'plan-1', planStartDate: '2026-01-01' });
+  api.getPlanToday.mockResolvedValue(crossBookDay());
+  api.getPlanDay.mockResolvedValue(crossBookDay({ dayNumber: 10, isToday: false, offsetFromToday: -42 }));
+  api.getContinuePosition.mockResolvedValue({
+    bookUsfm: 'MAT', bookName: 'Matthew', chapterNumber: 1, verseNumber: 1, verseId: 103,
+  });
+});
 
 describe('ReadPageClient', () => {
-  const auth = { type: 'bearer' as const, token: 'token-12345678' };
-  const planDay = {
-    dayNumber: 4,
-    label: 'genesis 1-2',
-    book: 'GEN',
-    chapter: 1,
-    startVerseId: 1,
-    endVerseId: 10,
-    startVerse: 1,
-    endVerse: 10,
-  };
-  const chapters = [{ id: 1, number: 1, verseCount: 31 }];
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockUseAuthContext.mockReturnValue({ auth, isProvisioning: false });
-    mockUseOfflineQueue.mockReturnValue({ hasPermanentFailure: false });
-    mockUseVerseRead.mockReturnValue({
-      markChapter: jest.fn(),
-      markDayComplete: jest.fn(),
-    });
-    mockUseContinueReading.mockReturnValue(null);
+  it('shows every chapter of the day, including the second book', async () => {
+    renderPage();
+    expect(await screen.findByRole('group', { name: /deuteronomy chapters/i })).toBeInTheDocument();
+    const matthew = screen.getByRole('group', { name: /matthew chapters/i });
+    expect(within(matthew).getByRole('button', { name: /matthew 1, unread/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /deuteronomy 34, read/i })).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: '50% complete' })).toBeInTheDocument();
   });
 
-  function primeQueries(meResult: { planStartDate: string | null } | null) {
-    mockUseQuery.mockImplementation(({ queryKey }: { queryKey: unknown[] }) => {
-      if (queryKey[0] === 'me') {
-        return { data: meResult };
-      }
-
-      if (queryKey[0] === 'plan') {
-        return { data: planDay, isLoading: false };
-      }
-
-      if (queryKey[0] === 'bible' && queryKey[1] === 'chapters') {
-        return { data: chapters };
-      }
-
-      if (queryKey[0] === 'progress') {
-        return { data: [] };
-      }
-
-      return { data: undefined };
-    });
-  }
-
-  it('shows the start-date nudge when the profile is missing a planStartDate', () => {
-    primeQueries({ planStartDate: null });
-
-    render(<ReadPageClient />);
-
-    expect(
-      screen.getByRole('link', {
-        name: /set your reading start date in settings to track your plan progress/i,
-      }),
-    ).toHaveAttribute('href', '/settings');
+  it('marks a chapter read instantly (optimistic) and queues only its unread verses', async () => {
+    renderPage();
+    const tile = await screen.findByRole('button', { name: /matthew 1, unread/i });
+    await userEvent.click(tile);
+    expect(await screen.findByRole('button', { name: /matthew 1, read/i })).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: '100% complete' })).toBeInTheDocument();
+    await waitFor(() => expect(enqueue).toHaveBeenCalledWith('mark', [103, 104, 105]));
+    expect(flush).toHaveBeenCalled();
   });
 
-  it('does not show the start-date nudge once the user has set a planStartDate', () => {
-    primeQueries({ planStartDate: '2026-04-01' });
+  it('works from the keyboard (Enter on a tile)', async () => {
+    renderPage();
+    const tile = await screen.findByRole('button', { name: /matthew 1, unread/i });
+    tile.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(enqueue).toHaveBeenCalledWith('mark', [103, 104, 105]));
+  });
 
-    render(<ReadPageClient />);
+  it('tapping a read chapter undoes it', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /deuteronomy 34, read/i }));
+    await waitFor(() => expect(enqueue).toHaveBeenCalledWith('unmark', [100, 101, 102]));
+    expect(await screen.findByRole('button', { name: /deuteronomy 34, unread/i })).toBeInTheDocument();
+  });
 
-    expect(
-      screen.queryByRole('link', {
-        name: /set your reading start date in settings to track your plan progress/i,
-      }),
-    ).not.toBeInTheDocument();
+  it('"mark day complete" marks only this day\'s unread verses', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /mark day 52 complete/i }));
+    await waitFor(() => expect(enqueue).toHaveBeenCalledWith('mark', [103, 104, 105]));
+  });
+
+  it('opens jw.org at the first unfinished chapter', async () => {
+    renderPage();
+    const link = await screen.findByRole('link', { name: /open matthew 1 in jw.org/i });
+    expect(link).toHaveAttribute('href', expect.stringContaining('bible=40001'));
+  });
+
+  it('honours ?day=N from the plan list', async () => {
+    search = new URLSearchParams('day=10');
+    renderPage();
+    expect(await screen.findByText(/day 10 of 365/i)).toBeInTheDocument();
+    expect(api.getPlanDay).toHaveBeenCalledWith('plan-1', 10, auth);
+    expect(api.getPlanToday).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: /back to today/i })).toHaveAttribute('href', '/read');
+  });
+
+  it('asks for a start date and can start today', async () => {
+    api.getMe.mockResolvedValue({ id: 'u', planId: 'plan-1', planStartDate: null });
+    api.updateUser.mockResolvedValue({ planId: 'plan-1', planStartDate: '2026-11-10' });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: /start today/i }));
+    await waitFor(() =>
+      expect(api.updateUser).toHaveBeenCalledWith(
+        { planStartDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+        auth,
+      ),
+    );
+  });
+
+  it('does not ask for a start date once one is set', async () => {
+    renderPage();
+    await screen.findByText(/day 52 of 365/i);
+    expect(screen.queryByRole('button', { name: /start today/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a retry instead of spinning forever when the day fails to load', async () => {
+    api.getPlanToday.mockRejectedValue(new Error('down'));
+    renderPage();
+    expect(await screen.findByText(/this reading couldn.t load/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 });

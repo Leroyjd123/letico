@@ -4,7 +4,7 @@ import { ContinuePill } from './ContinuePill';
 const meta: Meta<typeof ContinuePill> = {
   title: 'Reader/ContinuePill',
   component: ContinuePill,
-  args: { onClick: () => {} },
+  args: { isLoading: false },
 };
 export default meta;
 type Story = StoryObj<typeof ContinuePill>;
@@ -15,3 +15,4 @@ export const WithPosition: Story = {
   },
 };
 export const Finished: Story = { args: { position: null } };
+export const Loading: Story = { args: { position: null, isLoading: true } };

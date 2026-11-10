@@ -2,11 +2,14 @@
 /**
  * ChapterTile.tsx
  *
- * Tap: marks entire chapter read.
+ * Tap / click / Enter / Space: toggles the chapter (unread or partial → read,
+ * read → unread, so a mistaken tap is undone by tapping again).
  * Long-press (600ms): opens the verse selector modal.
- * Alt+Enter (keyboard): triggers long-press action (verse selector).
+ * Alt+Enter (keyboard): opens the verse selector.
  *
- * Uses pointer events (not mouse/touch) for unified desktop + mobile handling.
+ * The tap is a real `click` handler so keyboard users can activate it —
+ * pointer events alone never fire for Enter/Space. Pointer events are only
+ * used to detect the long press, which then suppresses the following click.
  * touch-action: manipulation prevents double-tap-to-zoom interference.
  * user-select: none prevents text selection on long-press (edge case E11).
  *
@@ -15,10 +18,12 @@
  */
 import { useState, useRef, type CSSProperties, type PointerEvent, type KeyboardEvent } from 'react';
 
-export type ReadState = 'read' | 'partial' | 'unread' | 'locked';
+export type ReadState = 'read' | 'partial' | 'unread';
 
 interface ChapterTileProps {
   chapterNumber: number;
+  /** Accessible name, e.g. "matthew 1" (defaults to "chapter N") */
+  label?: string;
   readState: ReadState;
   onTap: () => void;
   onLongPress: () => void;
@@ -43,17 +48,11 @@ const STATE_STYLES: Record<ReadState, CSSProperties> = {
     color: 'var(--color-text-secondary)',
     border: '1px solid var(--chapter-unread-border)',
   },
-  locked: {
-    backgroundColor: 'var(--color-bg-surface)',
-    color: 'var(--color-text-muted)',
-    border: '1px solid var(--color-outline)',
-    opacity: 0.35,
-    pointerEvents: 'none' as const,
-  },
 };
 
 export function ChapterTile({
   chapterNumber,
+  label,
   readState,
   onTap,
   onLongPress,
@@ -71,7 +70,7 @@ export function ChapterTile({
   }
 
   function handlePointerDown(e: PointerEvent<HTMLButtonElement>) {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.button !== 0) return;
     didLongPress.current = false;
     setPressed(true);
 
@@ -83,17 +82,22 @@ export function ChapterTile({
   }
 
   function handlePointerUp() {
+    clearTimer();
     setPressed(false);
-    if (!didLongPress.current) {
-      clearTimer();
-      onTap();
-    }
   }
 
   function handlePointerCancel() {
+    // Fires when the user scrolls the page from a tile: never a tap.
     clearTimer();
     setPressed(false);
-    didLongPress.current = false;
+  }
+
+  function handleClick() {
+    if (didLongPress.current) {
+      didLongPress.current = false; // the long press already handled it
+      return;
+    }
+    onTap();
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
@@ -105,25 +109,24 @@ export function ChapterTile({
 
   const stateStyle = STATE_STYLES[readState];
   const readLabel =
-    readState === 'read'
-      ? 'read'
-      : readState === 'partial'
-      ? 'partially read'
-      : readState === 'locked'
-      ? 'locked'
-      : 'unread';
+    readState === 'read' ? 'read' : readState === 'partial' ? 'partially read' : 'unread';
+  const actionHint = readState === 'read' ? 'tap to mark unread' : 'tap to mark read';
 
   return (
     <button
-      aria-label={`chapter ${chapterNumber}, ${readLabel}`}
+      type="button"
+      aria-label={`${label ?? `chapter ${chapterNumber}`}, ${readLabel}. ${actionHint}; hold or alt+enter to choose verses`}
+      aria-pressed={readState === 'read'}
+      onClick={handleClick}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerCancel}
       onPointerCancel={handlePointerCancel}
       onContextMenu={(e) => e.preventDefault()}
       onKeyDown={handleKeyDown}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      // Hint only for real mouse hover: touch devices emulate mouseenter on
+      // tap and the hint would then stick over the chapter number.
+      onPointerEnter={(e) => { if (e.pointerType === 'mouse') setHovered(true); }}
+      onPointerLeave={() => { setHovered(false); handlePointerCancel(); }}
       style={{
         ...stateStyle,
         position: 'relative',
@@ -134,7 +137,7 @@ export function ChapterTile({
         fontFamily: 'var(--font-headline)',
         fontWeight: 500,
         fontSize: '0.875rem',
-        cursor: readState === 'locked' ? 'not-allowed' : 'pointer',
+        cursor: 'pointer',
         userSelect: 'none',
         touchAction: 'manipulation',
         WebkitTapHighlightColor: 'transparent',
@@ -170,7 +173,6 @@ export function ChapterTile({
       )}
 
       {/* Hover hint — fades in on desktop */}
-      {readState !== 'locked' && (
         <span
           aria-hidden="true"
           style={{
@@ -199,7 +201,7 @@ export function ChapterTile({
         >
           hold to select verses
         </span>
-      )}
+
     </button>
   );
 }

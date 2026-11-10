@@ -27,38 +27,57 @@ export interface Verse {
   text: string;
 }
 
-export interface PlanDayView {
-  dayNumber: number;
-  label: string;
+/** One chapter (or part of one) that belongs to a plan day. */
+export interface PlanDayChapter {
+  chapterId: number;
+  chapterNumber: number;
+  /** USFM code, e.g. "GEN" */
   book: string;
+  bookName: string;
+  /** Verse ids in this chapter that belong to the day, ordered by verse number */
+  verseIds: number[];
+  /** Verse numbers matching verseIds index-for-index */
+  verseNumbers: number[];
+  /** Subset of verseIds the user has already read */
+  readVerseIds: number[];
+}
+
+export interface PlanDayView {
+  planId: string;
+  dayNumber: number;
+  totalDays: number;
+  label: string;
+  /** USFM code of the day's first book */
+  book: string;
+  /** First chapter of the day */
   chapter: number;
   startVerse: number;
   endVerse: number;
   startVerseId: number;
   endVerseId: number;
+  /** Every chapter in the day, across book boundaries, in reading order */
+  chapters: PlanDayChapter[];
+  totalVerses: number;
+  versesRead: number;
   isToday: boolean;
   offsetFromToday: number;
 }
 
-export interface PlanDayListItem {
+export interface PlanDaySummary {
   dayNumber: number;
   label: string;
-  startVerseId: number;
-  endVerseId: number;
+  completionPct: number;
   isToday: boolean;
   offsetFromToday: number;
-}
-
-export interface PlanDayListResponse {
-  items: PlanDayListItem[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 export interface VerseReadResult {
   inserted: number;
   alreadyRead: number;
+}
+
+export interface VerseUnreadResult {
+  removed: number;
 }
 
 export interface ContinuePosition {
@@ -71,7 +90,9 @@ export interface ContinuePosition {
 
 export interface ProgressSummary {
   totalVersesRead: number;
+  /** % of the user's plan that has been read */
   completionPct: number;
+  /** Consecutive local days with at least one verse read */
   streakDays: number;
   aheadBehindVerses: number | null;
 }
@@ -113,6 +134,7 @@ export interface PlanListItem {
   id: string;
   name: string;
   totalDays: number;
+  isDefault: boolean;
 }
 
 export interface UpdateUserResult {
@@ -141,4 +163,3 @@ export interface MeResult {
   planStartDate: string | null;
 }
 
-export type { };

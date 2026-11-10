@@ -2,9 +2,9 @@
  * /read — Reading home screen (Server Component wrapper)
  *
  * Delegates all data fetching and interactivity to ReadPageClient.
- * Server-side session handling is deferred to Phase 5.
  */
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { ReadPageClient } from './ReadPageClient';
 
 export const metadata: Metadata = {
@@ -13,5 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default function ReadPage() {
-  return <ReadPageClient />;
+  // useSearchParams (?day=N) requires a Suspense boundary for static rendering.
+  return (
+    <Suspense fallback={null}>
+      <ReadPageClient />
+    </Suspense>
+  );
 }

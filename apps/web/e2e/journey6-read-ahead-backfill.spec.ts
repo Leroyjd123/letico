@@ -14,25 +14,34 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Journey 6 — Read-ahead and backfill', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-  });
 
   test('future and past days are fully accessible', async ({ page }) => {
-    await page.goto('/plan');
+    await page.goto('/read');
+    await expect(page.getByRole('button', { name: /mark day \d+ complete/i })).toBeVisible({ timeout: 15_000 });
 
-    // Wait for plan list to load
-    await expect(page.locator('[data-day]').or(page.locator('li, [role="listitem"]')).first()).toBeVisible({ timeout: 15_000 });
+    // Plan list → a future day
+    await page.getByRole('link', { name: /plan$/i }).click();
+    const futureRow = page.getByRole('link', { name: /^day 6,/i });
+    await expect(futureRow).toBeVisible({ timeout: 15_000 });
+    await futureRow.click();
+    await expect(page).toHaveURL(/\/read\?day=6$/);
+    await expect(page.getByText(/day 6 of \d+/i)).toBeVisible({ timeout: 10_000 });
 
-    // The plan list is scrollable — verify it has rows
-    const rows = page.locator('[aria-label*="day"], li').filter({ has: page.locator('text=/day \\d+/i') });
-    await expect(rows.first()).toBeVisible({ timeout: 5_000 });
+    // Read ahead: mark a chapter on that day
+    await page.getByRole('button', { name: /, unread\./ }).first().click();
+
+    // Back on the plan list, day 6 now shows progress
+    await page.getByRole('link', { name: /plan$/i }).click();
+    await expect(page.getByRole('link', { name: /^day 6, .*, [1-9]\d*% complete/i })).toBeVisible({ timeout: 15_000 });
+
+    // Previous-day navigation works for backfilling
+    await page.goto('/read?day=6');
+    await page.getByRole('link', { name: /previous day/i }).click();
+    await expect(page.getByText(/day 5 of \d+/i)).toBeVisible({ timeout: 10_000 });
   });
 
-  test('analytics page shows stats after reading', async ({ page }) => {
+  test('journey page renders', async ({ page }) => {
     await page.goto('/analytics');
-    await expect(page.locator('text=/analytics/i').first()).toBeVisible({ timeout: 10_000 });
-    // The page must render without errors
-    await expect(page.locator('text=/your reading at a glance/i')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('heading', { name: /your journey/i })).toBeVisible({ timeout: 10_000 });
   });
 });
